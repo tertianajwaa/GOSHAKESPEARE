@@ -1,0 +1,2015 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SHAKESPEARE - Smart Room IoT Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+  <style>
+    :root {
+      --cyan: #00d4e8;
+      --emerald: #00e5a0;
+      --amber: #f5a623;
+      --rose: #ff4d6d;
+      --violet: #a855f7;
+      --bg-deep: #020b18;
+      --bg-card: rgba(8, 25, 50, 0.7);
+      --border: rgba(0, 212, 232, 0.12);
+      --grid-line: rgba(0,212,232,0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-deep);
+      font-family: 'DM Sans', sans-serif;
+      color: #e2f0ff;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* BACKGROUND */
+    .scene-bg {
+      position: fixed; inset: 0; z-index: -2;
+      background:
+        radial-gradient(ellipse 80% 60% at 10% 0%, rgba(0,80,160,0.35) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(0,180,120,0.2) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(0,50,100,0.15) 0%, transparent 70%),
+        #020b18;
+    }
+
+    /* Hexagonal grid overlay */
+    .hex-grid {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.4;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50V18L28 2l28 16v32L28 66zm0-2l26-15V19L28 4 2 19v30l26 15z' fill='none' stroke='rgba(0,212,232,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+    }
+
+    /* Scanline effect */
+    .scanlines {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+      );
+    }
+
+    /* GLASSMORPHISM*/
+    .glass {
+      background: var(--bg-card);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .glass-bright {
+      background: rgba(10, 35, 65, 0.85);
+      backdrop-filter: blur(30px);
+      border: 1px solid rgba(0,212,232,0.2);
+      border-radius: 20px;
+      box-shadow: 0 0 40px rgba(0,212,232,0.06), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    /* TYPOGRAPHY */
+    .font-display { font-family: 'Syne', sans-serif; }
+    .font-mono { font-family: 'Space Mono', monospace; }
+
+    /*  HERO */
+    .hero-section {
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero-section::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+
+    .circuit-decoration {
+      position: absolute; right: 0; top: 0; width: 45%; height: 100%;
+      pointer-events: none; overflow: hidden;
+    }
+
+    /* Animated data pulses */
+    @keyframes pulse-line { 0%,100%{opacity:0;transform:scaleX(0)} 50%{opacity:1;transform:scaleX(1)} }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes float-up { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-40px);opacity:0} }
+    @keyframes spin-slow { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+    @keyframes glow-pulse { 0%,100%{box-shadow:0 0 8px var(--cyan)} 50%{box-shadow:0 0 25px var(--cyan), 0 0 50px rgba(0,212,232,0.3)} }
+    @keyframes slide-in { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes fade-up { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes number-tick { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    .animate-fade-up { animation: fade-up 0.8s ease forwards; }
+    .animate-fade-up-d1 { animation: fade-up 0.8s 0.1s ease both; }
+    .animate-fade-up-d2 { animation: fade-up 0.8s 0.2s ease both; }
+    .animate-fade-up-d3 { animation: fade-up 0.8s 0.3s ease both; }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 12px var(--emerald);
+      animation: blink 2s infinite;
+    }
+
+    /* ═══════════════════════════ NAVIGATION ═══════════════════════════ */
+    .nav-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(2, 11, 24, 0.85);
+      backdrop-filter: blur(30px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      color: rgba(180,210,240,0.6);
+      background: transparent;
+    }
+    .tab-btn:hover { color: #e2f0ff; background: rgba(0,212,232,0.06); }
+    .tab-btn.active {
+      background: rgba(0,212,232,0.12);
+      border-color: rgba(0,212,232,0.3);
+      color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0,212,232,0.1);
+    }
+
+    /* ═══════════════════════════ CARDS ═══════════════════════════ */
+    .metric-card {
+      transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+      cursor: default;
+    }
+    .metric-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(0,212,232,0.25);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4), 0 0 30px rgba(0,212,232,0.08);
+    }
+
+    .value-display {
+      font-family: 'Space Mono', monospace;
+      font-size: 2.4rem;
+      font-weight: 700;
+      line-height: 1;
+      animation: number-tick 0.3s ease;
+    }
+
+    /* Status badges */
+    .badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 3px 8px;
+      border-radius: 5px;
+      text-transform: uppercase;
+    }
+    .badge-ok { background: rgba(0,229,160,0.12); color: var(--emerald); border: 1px solid rgba(0,229,160,0.25); }
+    .badge-warn { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.25); }
+    .badge-crit { background: rgba(255,77,109,0.15); color: var(--rose); border: 1px solid rgba(255,77,109,0.3); animation: blink 1s infinite; }
+    .badge-info { background: rgba(0,212,232,0.1); color: var(--cyan); border: 1px solid rgba(0,212,232,0.2); }
+
+    /* ═══════════════════════════ GAUGE ═══════════════════════════ */
+    .gauge-wrap { position: relative; display: inline-flex; }
+
+    /* ═══════════════════════════ PREDICTION / ANOMALY ═══════════════════════════ */
+    .anomaly-card {
+      border-left: 3px solid;
+      transition: all 0.3s ease;
+      animation: slide-in 0.5s ease;
+    }
+    .anomaly-normal { border-color: var(--emerald); }
+    .anomaly-warn { border-color: var(--amber); }
+    .anomaly-critical { border-color: var(--rose); }
+
+    .health-bar { height: 6px; border-radius: 3px; overflow: hidden; background: rgba(255,255,255,0.06); }
+    .health-bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+
+    /* Prediction confidence meter */
+    .confidence-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+    .confidence-ring svg { transform: rotate(-90deg); }
+    .confidence-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; }
+
+    /* Alert panel */
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid;
+      margin-bottom: 8px;
+      animation: slide-in 0.4s ease;
+    }
+    .alert-ok { background: rgba(0,229,160,0.05); border-color: rgba(0,229,160,0.15); }
+    .alert-warn { background: rgba(245,166,35,0.07); border-color: rgba(245,166,35,0.2); }
+    .alert-crit { background: rgba(255,77,109,0.08); border-color: rgba(255,77,109,0.25); }
+
+    /* ═══════════════════════════ ROOM MAP ═══════════════════════════ */
+    .room-node {
+      width: 100%; height: 54px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid;
+      position: relative;
+      letter-spacing: -0.02em;
+    }
+    .room-node:hover { transform: scale(1.15); z-index: 10; }
+    .room-node.active-room { background: rgba(0,229,160,0.15); border-color: var(--emerald); color: var(--emerald); box-shadow: 0 0 16px rgba(0,229,160,0.2); }
+    .room-node.warn-room { background: rgba(245,166,35,0.15); border-color: var(--amber); color: var(--amber); box-shadow: 0 0 16px rgba(245,166,35,0.2); }
+    .room-node.crit-room { background: rgba(255,77,109,0.15); border-color: var(--rose); color: var(--rose); box-shadow: 0 0 16px rgba(255,77,109,0.25); animation: blink 1s infinite; }
+    .room-node.empty-room { background: rgba(30,60,100,0.3); border-color: rgba(100,150,200,0.15); color: rgba(150,180,220,0.4); }
+
+    /* ═══════════════════════════ CHART CONTAINERS ═══════════════════════════ */
+    .chart-container { position: relative; }
+
+    /* ═══════════════════════════ TABS ═══════════════════════════ */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fade-up 0.5s ease; }
+
+    /* ═══════════════════════════ SCROLLBAR ═══════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,212,232,0.2); border-radius: 9px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0,212,232,0.4); }
+
+    /* ═══════════════════════════ CUSTOM RANGE ═══════════════════════════ */
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; transition: 0.2s; }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+    /* ═══════════════════════════ PULSE ═══════════════════════════ */
+    .live-pulse {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--rose);
+      position: relative;
+    }
+    .live-pulse::after {
+      content: ''; position: absolute; inset: -4px; border-radius: 50%;
+      border: 1px solid var(--rose); animation: pulse-ring 1.5s infinite;
+    }
+    @keyframes pulse-ring { 0%{transform:scale(1);opacity:1} 100%{transform:scale(2.5);opacity:0} }
+
+    /* ═══════════════════════════ TOPOLOGY LINES ═══════════════════════════ */
+    .topo-line { stroke: rgba(0,212,232,0.15); stroke-width: 1; stroke-dasharray: 4 4; }
+    .topo-dot { fill: var(--cyan); filter: drop-shadow(0 0 4px var(--cyan)); }
+    @keyframes dash-move { to { stroke-dashoffset: -20; } }
+    .topo-line-active { animation: dash-move 1s linear infinite; stroke: rgba(0,212,232,0.35); }
+
+    /* Neon glow */
+    .neon-cyan { color: var(--cyan); text-shadow: 0 0 20px rgba(0,212,232,0.6); }
+    .neon-emerald { color: var(--emerald); text-shadow: 0 0 20px rgba(0,229,160,0.5); }
+    .neon-amber { color: var(--amber); text-shadow: 0 0 20px rgba(245,166,35,0.5); }
+    .neon-rose { color: var(--rose); text-shadow: 0 0 20px rgba(255,77,109,0.5); }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(0,212,232,0.5);
+    }
+
+    /* Divider with glow */
+    .glow-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,212,232,0.3), transparent);
+      margin: 24px 0;
+    }
+
+    /* Prediction meter */
+    .pred-bar-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .pred-bar-track { flex: 1; height: 5px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; }
+    .pred-bar-fill { height: 100%; border-radius: 3px; transition: width 1.5s cubic-bezier(0.4,0,0.2,1); }
+
+    /* AI thinking animation */
+    @keyframes thinking { 0%,100%{opacity:0.3} 50%{opacity:1} }
+    .ai-dot { width:6px; height:6px; border-radius:50%; background:var(--violet); display:inline-block; margin:0 2px; }
+    .ai-dot:nth-child(1){animation:thinking 1.4s 0s infinite}
+    .ai-dot:nth-child(2){animation:thinking 1.4s 0.2s infinite}
+    .ai-dot:nth-child(3){animation:thinking 1.4s 0.4s infinite}
+
+    /* Timeline */
+    .timeline-item { position: relative; padding-left: 28px; margin-bottom: 20px; }
+    .timeline-item::before { content:''; position:absolute; left:6px; top:6px; bottom:-20px; width:1px; background:rgba(0,212,232,0.15); }
+    .timeline-item:last-child::before { display:none; }
+    .timeline-dot { position:absolute; left:0; top:4px; width:13px; height:13px; border-radius:50%; border:2px solid; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; }
+    th { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(0,212,232,0.5); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+    tr:hover td { background: rgba(0,212,232,0.03); }
+
+    /* Topology SVG */
+    .topo-svg { width: 100%; height: 300px; }
+  </style>
+</head>
+<body>
+
+<!-- Backgrounds -->
+<div class="scene-bg"></div>
+<div class="hex-grid"></div>
+<div class="scanlines"></div>
+
+<!-- ══════════════════════════════ HERO ══════════════════════════════ -->
+<section class="hero-section">
+  <div class="circuit-decoration">
+    <svg viewBox="0 0 600 500" xmlns="http://www.w3.org/2000/svg" style="position:absolute;right:-50px;top:-20px;width:100%;height:100%;opacity:0.25;">
+      <!-- Circuit board aesthetic lines -->
+      <path d="M100 50 L400 50 L400 200 L550 200" stroke="rgba(0,212,232,0.4)" stroke-width="1.5" fill="none"/>
+      <path d="M200 50 L200 150 L350 150 L350 350 L500 350" stroke="rgba(0,212,232,0.3)" stroke-width="1" fill="none"/>
+      <path d="M300 200 L300 400 L450 400" stroke="rgba(0,229,160,0.25)" stroke-width="1" fill="none"/>
+      <path d="M100 250 L250 250 L250 350 L450 350" stroke="rgba(0,212,232,0.2)" stroke-width="1" fill="none" stroke-dasharray="5 5"/>
+      <!-- Node circles -->
+      <circle cx="100" cy="50" r="5" fill="none" stroke="rgba(0,212,232,0.6)" stroke-width="1.5"/>
+      <circle cx="400" cy="200" r="7" fill="rgba(0,212,232,0.1)" stroke="rgba(0,212,232,0.5)" stroke-width="1.5"/>
+      <circle cx="200" cy="150" r="4" fill="rgba(0,229,160,0.2)" stroke="rgba(0,229,160,0.5)" stroke-width="1.5"/>
+      <circle cx="350" cy="350" r="6" fill="rgba(0,212,232,0.1)" stroke="rgba(0,212,232,0.4)" stroke-width="1.5"/>
+      <circle cx="300" cy="400" r="4" fill="rgba(0,229,160,0.1)" stroke="rgba(0,229,160,0.4)" stroke-width="1"/>
+      <!-- IC-like boxes -->
+      <rect x="370" y="170" width="60" height="60" rx="4" fill="rgba(0,30,60,0.8)" stroke="rgba(0,212,232,0.35)" stroke-width="1"/>
+      <line x1="380" y1="175" x2="380" y2="165" stroke="rgba(0,212,232,0.3)" stroke-width="1"/>
+      <line x1="393" y1="175" x2="393" y2="165" stroke="rgba(0,212,232,0.3)" stroke-width="1"/>
+      <line x1="406" y1="175" x2="406" y2="165" stroke="rgba(0,212,232,0.3)" stroke-width="1"/>
+      <line x1="419" y1="175" x2="419" y2="165" stroke="rgba(0,212,232,0.3)" stroke-width="1"/>
+      <text x="400" y="204" text-anchor="middle" fill="rgba(0,212,232,0.6)" font-size="8" font-family="Space Mono,monospace">ESP32</text>
+      <!-- More decorations -->
+      <rect x="220" y="120" width="50" height="50" rx="4" fill="rgba(0,20,50,0.8)" stroke="rgba(0,229,160,0.3)" stroke-width="1"/>
+      <text x="245" y="148" text-anchor="middle" fill="rgba(0,229,160,0.5)" font-size="7" font-family="Space Mono,monospace">SCD41</text>
+      <circle cx="550" cy="200" r="18" fill="rgba(0,30,70,0.8)" stroke="rgba(0,212,232,0.4)" stroke-width="1.5"/>
+      <text x="550" y="204" text-anchor="middle" fill="rgba(0,212,232,0.6)" font-size="7" font-family="Space Mono,monospace">WiFi</text>
+      <!-- Animated pulse dots -->
+      <circle cx="400" cy="200" r="14" fill="none" stroke="rgba(0,212,232,0.2)" stroke-width="1">
+        <animate attributeName="r" values="7;18;7" dur="2.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;0;0.6" dur="2.5s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  </div>
+
+  <div style="max-width:1400px;margin:0 auto;padding:60px 32px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;">
+
+      <!-- Left -->
+      <div class="animate-fade-up">
+        <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(0,212,232,0.06);border:1px solid rgba(0,212,232,0.2);padding:8px 18px;border-radius:99px;margin-bottom:28px;">
+          <div class="status-dot"></div>
+          <span style="font-family:'Space Mono',monospace;font-size:11px;color:rgba(0,212,232,0.8);letter-spacing:0.08em;">ONLINE · BRAWIJAYA SMART CAMPUS</span>
+        </div>
+
+        <h1 class="font-display" style="font-size:5.5rem;font-weight:800;line-height:0.9;letter-spacing:-0.03em;margin-bottom:8px;">
+          <span style="background:linear-gradient(135deg,#00d4e8 0%,#00e5a0 50%,#00b4e8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 30px rgba(0,212,232,0.4));">SHAKE</span><br>
+          <span style="color:rgba(200,230,255,0.9);">SPEARE</span>
+        </h1>
+
+        <p style="font-family:'Space Mono',monospace;font-size:11px;color:rgba(0,212,232,0.5);letter-spacing:0.12em;margin-bottom:20px;margin-top:10px;">
+          SMART HUB · ACADEMIC KINETICS · ENVIRONMENT
+        </p>
+
+        <p style="color:rgba(180,210,245,0.75);line-height:1.7;font-size:1rem;max-width:480px;margin-bottom:32px;">
+          Sistem cerdas berbasis <strong style="color:#e2f0ff;">IoT & AI Predictive</strong> untuk efisiensi ruang kelas, monitoring real-time, deteksi anomali komponen, audit energi, dan otomasi lingkungan.
+        </p>
+
+        <!-- Feature chips -->
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:36px;">
+          <span class="badge badge-info"><i class="fa-solid fa-wifi" style="margin-right:5px;"></i>Real-Time IoT</span>
+          <span class="badge badge-ok"><i class="fa-solid fa-brain" style="margin-right:5px;"></i>AI Anomaly Detection</span>
+          <span class="badge badge-warn"><i class="fa-solid fa-bolt" style="margin-right:5px;"></i>Energy Audit</span>
+          <span class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;border:1px solid rgba(168,85,247,0.25);"><i class="fa-solid fa-leaf" style="margin-right:5px;"></i>Green Campus</span>
+        </div>
+
+        <div style="display:flex;gap:14px;flex-wrap:wrap;">
+          <button onclick="activateTab('overview')" style="display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(0,212,232,0.2),rgba(0,180,232,0.1));border:1px solid rgba(0,212,232,0.35);color:var(--cyan);font-family:'Syne',sans-serif;font-weight:700;font-size:14px;padding:14px 28px;border-radius:12px;cursor:pointer;transition:all 0.3s;box-shadow:0 0 25px rgba(0,212,232,0.15);"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 35px rgba(0,212,232,0.25)'"
+            onmouseout="this.style.transform='';this.style.boxShadow='0 0 25px rgba(0,212,232,0.15)'">
+            <i class="fa-solid fa-satellite-dish" style="animation:blink 2s infinite;"></i> Live Dashboard
+          </button>
+          <button onclick="activateTab('predict')" style="display:flex;align-items:center;gap:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;padding:14px 28px;border-radius:12px;cursor:pointer;transition:all 0.3s;"
+            onmouseover="this.style.transform='translateY(-3px)'"
+            onmouseout="this.style.transform=''">
+            <i class="fa-solid fa-triangle-exclamation"></i> Fault Prediction
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Smart Room Visual -->
+      <div class="animate-fade-up-d2" style="position:relative;">
+        <div style="position:absolute;inset:-2px;background:linear-gradient(135deg,rgba(0,212,232,0.2),rgba(0,229,160,0.1),rgba(0,212,232,0.05));border-radius:24px;filter:blur(8px);"></div>
+        <div class="glass-bright" style="border-radius:22px;overflow:hidden;padding:0;position:relative;">
+          <!-- Main illustration -->
+          <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=900&q=80"
+               alt="Smart Office Building"
+               style="width:100%;height:280px;object-fit:cover;display:block;opacity:0.6;mix-blend-mode:luminosity;filter:saturate(0.8) brightness(0.9);">
+          <!-- Overlay gradient -->
+          <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(2,11,24,0.1),rgba(2,11,24,0.7));pointer-events:none;"></div>
+
+          <!-- Floating stats over image -->
+          <div style="position:absolute;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;">
+            <div class="glass" style="padding:8px 14px;border-radius:10px;border-color:rgba(0,212,232,0.2);display:flex;align-items:center;gap:8px;">
+              <div class="live-pulse"></div>
+              <span style="font-family:'Space Mono',monospace;font-size:10px;color:#e2f0ff;">LIVE FEED</span>
+            </div>
+            <div class="glass" style="padding:8px 14px;border-radius:10px;border-color:rgba(0,229,160,0.2);display:flex;align-items:center;gap:8px;">
+              <i class="fa-solid fa-leaf" style="color:var(--emerald);font-size:11px;"></i>
+              <span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--emerald);">ECO MODE ON</span>
+            </div>
+          </div>
+
+          <!-- Bottom stats bar -->
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 20px;display:flex;gap:20px;align-items:flex-end;">
+            <div style="flex:1;">
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,212,232,0.5);margin-bottom:4px;">ACTIVE ROOMS</div>
+              <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--cyan);" id="heroActiveRooms">12</div>
+            </div>
+            <div style="flex:1;">
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,229,160,0.5);margin-bottom:4px;">ENERGY SAVED</div>
+              <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--emerald);">34%</div>
+            </div>
+            <div style="flex:1;">
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(255,77,109,0.5);margin-bottom:4px;">FAULT ALERTS</div>
+              <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--rose);" id="heroFaultCount">2</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom stat bar -->
+  <div style="background:rgba(0,212,232,0.04);border-top:1px solid var(--border);padding:12px 32px;display:flex;gap:40px;flex-wrap:wrap;max-width:1400px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <i class="fa-solid fa-microchip" style="color:var(--cyan);font-size:12px;"></i>
+      <span class="section-label">ESP32 · WiFi 2.4GHz</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <i class="fa-solid fa-cloud" style="color:var(--cyan);font-size:12px;"></i>
+      <span class="section-label">MQTT · Node-RED · InfluxDB</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <i class="fa-solid fa-shield-halved" style="color:var(--cyan);font-size:12px;"></i>
+      <span class="section-label">SCD41 · BH1750 · PZEM-004T · HLK-LD2410</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <i class="fa-solid fa-building-columns" style="color:var(--cyan);font-size:12px;"></i>
+      <span class="section-label">UB Green Campus 2023–2028</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ NAV ══════════════════════════════ -->
+<nav class="nav-bar">
+  <div style="max-width:1400px;margin:0 auto;padding:12px 32px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+    <button class="tab-btn active" data-tab="overview"><i class="fa-solid fa-chart-pie" style="margin-right:7px;"></i>Overview</button>
+    <button class="tab-btn" data-tab="predict"><i class="fa-solid fa-triangle-exclamation" style="margin-right:7px;color:#a855f7;"></i>Fault Prediction</button>
+    <button class="tab-btn" data-tab="logic"><i class="fa-solid fa-brain" style="margin-right:7px;color:#00d4e8;"></i>Logic</button>
+    <button class="tab-btn" data-tab="energy"><i class="fa-solid fa-bolt" style="margin-right:7px;color:var(--amber);"></i>Energy Audit</button>
+    <button class="tab-btn" data-tab="rooms"><i class="fa-solid fa-building" style="margin-right:7px;color:var(--emerald);"></i>Room Map</button>
+    <button class="tab-btn" data-tab="control"><i class="fa-solid fa-sliders" style="margin-right:7px;color:var(--rose);"></i>Control</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+      <!-- ESP32 Connection Config -->
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span id="connDot" style="width:8px;height:8px;border-radius:50%;background:rgba(255,100,100,0.5);display:inline-block;transition:all 0.5s;box-shadow:0 0 8px rgba(255,100,100,0.3);"></span>
+        <span id="connLabel" style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,100,100,0.6);">OFFLINE</span>
+      </div>
+      <button onclick="document.getElementById('esp32Panel').style.display=document.getElementById('esp32Panel').style.display==='none'?'flex':'none'"
+        style="display:flex;align-items:center;gap:6px;background:rgba(0,212,232,0.08);border:1px solid rgba(0,212,232,0.2);color:var(--cyan);font-family:'Space Mono',monospace;font-size:10px;padding:6px 12px;border-radius:8px;cursor:pointer;letter-spacing:0.05em;">
+        <i class="fa-solid fa-microchip"></i> ESP32 IP
+      </button>
+      <div class="live-pulse"></div>
+      <span style="font-family:'Space Mono',monospace;font-size:11px;color:rgba(255,100,100,0.8);">RECORDING</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ESP32 Config Panel -->
+<div id="esp32Panel" style="display:none;position:sticky;top:57px;z-index:99;max-width:1400px;margin:0 auto;padding:0 32px;">
+  <div style="background:rgba(2,15,35,0.97);border:1px solid rgba(0,212,232,0.25);border-top:none;border-radius:0 0 16px 16px;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;backdrop-filter:blur(20px);">
+    <i class="fa-solid fa-microchip" style="color:var(--cyan);font-size:16px;"></i>
+    <div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,212,232,0.5);letter-spacing:0.12em;margin-bottom:4px;">ESP32 IP ADDRESS</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(180,210,245,0.4);">http://</span>
+        <input id="esp32IpInput" type="text" placeholder="192.168.1.100" value="192.168.1.100"
+          style="background:rgba(0,212,232,0.06);border:1px solid rgba(0,212,232,0.2);color:#e2f0ff;font-family:'Space Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;outline:none;width:160px;"
+          onkeydown="if(event.key==='Enter')setESP32IP()">
+        <span style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(180,210,245,0.4);">/data</span>
+        <button onclick="setESP32IP()"
+          style="background:rgba(0,212,232,0.12);border:1px solid rgba(0,212,232,0.3);color:var(--cyan);font-family:'Syne',sans-serif;font-weight:700;font-size:12px;padding:6px 14px;border-radius:8px;cursor:pointer;">
+          CONNECT
+        </button>
+      </div>
+    </div>
+    <div id="connStatusBox" style="margin-left:auto;font-family:'Space Mono',monospace;font-size:10px;color:rgba(180,210,245,0.4);">
+      Belum terhubung ke ESP32
+    </div>
+    <div style="font-size:11px;color:rgba(180,210,245,0.3);">
+      💡 Tip: Sensor yang terhubung akan otomatis menggantikan data simulasi
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ MAIN ══════════════════════════════ -->
+<main style="max-width:1400px;margin:0 auto;padding:32px 32px 60px;">
+
+  <!-- ██████████ TAB: OVERVIEW ██████████ -->
+  <section id="overview" class="tab-content active" style="space-y:24px;">
+
+    <!-- KPI Row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+
+      <!-- Temp -->
+      <div class="glass metric-card" style="padding:22px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:radial-gradient(circle,rgba(0,212,232,0.1),transparent);border-radius:50%;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:rgba(0,212,232,0.5);">SUHU</span>
+          <i class="fa-solid fa-temperature-high" style="color:var(--cyan);font-size:16px;"></i>
+        </div>
+        <div class="value-display neon-cyan" id="tempValue">26.0°C</div>
+        <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;">
+          <span id="tempBadge" class="badge badge-ok">OPTIMAL</span>
+          <span style="font-size:11px;color:rgba(180,210,245,0.4);">Target 23°C</span>
+        </div>
+      </div>
+
+      <!-- Humidity -->
+      <div class="glass metric-card" style="padding:22px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:radial-gradient(circle,rgba(0,229,160,0.08),transparent);border-radius:50%;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:rgba(0,229,160,0.5);">KELEMBAPAN</span>
+          <i class="fa-solid fa-droplet" style="color:var(--emerald);font-size:16px;"></i>
+        </div>
+        <div class="value-display neon-emerald" id="humidityValue">60%</div>
+        <div style="margin-top:8px;"><span class="badge badge-ok">NORMAL</span></div>
+      </div>
+
+      <!-- CO2 -->
+      <div class="glass metric-card" style="padding:22px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:radial-gradient(circle,rgba(245,166,35,0.08),transparent);border-radius:50%;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:rgba(245,166,35,0.5);">KADAR CO₂</span>
+          <i class="fa-solid fa-wind" style="color:var(--amber);font-size:16px;"></i>
+        </div>
+        <div class="value-display neon-amber" id="co2Value">700 ppm</div>
+        <div style="margin-top:8px;"><span class="badge badge-ok" id="co2Badge">BAIK</span></div>
+      </div>
+
+      <!-- Lux -->
+      <div class="glass metric-card" style="padding:22px;position:relative;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:rgba(255,220,50,0.5);">CAHAYA</span>
+          <i class="fa-solid fa-sun" style="color:#fde047;font-size:16px;"></i>
+        </div>
+        <div class="value-display" style="color:#fde047;text-shadow:0 0 20px rgba(253,224,71,0.5);" id="luxValue">120 Lx</div>
+        <div style="margin-top:8px;"><span id="lampBrightness" class="badge" style="background:rgba(253,224,71,0.1);color:#fde047;border:1px solid rgba(253,224,71,0.25);">LAMPU 100%</span></div>
+      </div>
+
+      <!-- Occupancy -->
+      <div class="glass metric-card" style="padding:22px;" id="presenceCard">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:rgba(0,229,160,0.5);">OKUPANSI</span>
+          <i class="fa-solid fa-users" style="color:var(--emerald);font-size:16px;"></i>
+        </div>
+        <div class="value-display" id="presenceValue" style="font-size:1.6rem;color:var(--emerald);">Ada Orang</div>
+        <div style="margin-top:8px;"><span class="badge badge-ok" id="presenceBadge">AKTIF</span></div>
+      </div>
+
+      <!-- System Health -->
+      <div class="glass metric-card" style="padding:22px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:rgba(168,85,247,0.5);">SYS HEALTH</span>
+          <i class="fa-solid fa-heart-pulse" style="color:#a855f7;font-size:16px;"></i>
+        </div>
+        <div class="value-display" id="healthScore" style="color:#a855f7;text-shadow:0 0 20px rgba(168,85,247,0.5);">98%</div>
+        <div style="margin-top:8px;"><span class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;border:1px solid rgba(168,85,247,0.25);" id="healthBadge">SEHAT</span></div>
+      </div>
+
+    </div>
+
+    <!-- LD2410 Radar Detail Card -->
+    <div class="glass-bright" style="padding:22px;margin-bottom:20px;border-left:3px solid var(--emerald);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:38px;height:38px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-satellite-dish" style="color:var(--emerald);font-size:16px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">LD2410 Radar Presence</div>
+            <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,229,160,0.5);margin-top:2px;letter-spacing:0.1em;">MMWAVE 24GHz · JARAK HINGGA 600cm</div>
+          </div>
+        </div>
+        <span class="badge badge-ok" id="radarStatus">MENUNGGU...</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+        <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(0,229,160,0.1);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,229,160,0.5);letter-spacing:0.12em;margin-bottom:6px;">STATUS</div>
+          <div id="radarPresence" style="font-family:'Space Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--emerald);">—</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(0,212,232,0.1);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,212,232,0.5);letter-spacing:0.12em;margin-bottom:6px;">JARAK DIAM</div>
+          <div id="radarStationaryDist" style="font-family:'Space Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--cyan);">— cm</div>
+          <div id="radarStationaryEnergy" style="font-size:10px;color:rgba(180,210,245,0.35);margin-top:3px;">Energi: —</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(245,166,35,0.1);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(245,166,35,0.5);letter-spacing:0.12em;margin-bottom:6px;">JARAK GERAK</div>
+          <div id="radarMovingDist" style="font-family:'Space Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--amber);">— cm</div>
+          <div id="radarMovingEnergy" style="font-size:10px;color:rgba(180,210,245,0.35);margin-top:3px;">Energi: —</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(168,85,247,0.1);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(168,85,247,0.5);letter-spacing:0.12em;margin-bottom:6px;">SENSOR STATUS</div>
+          <div id="radarConnOk" style="font-family:'Space Mono',monospace;font-size:1.1rem;font-weight:700;color:#a855f7;">SIMULASI</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px;">
+
+      <!-- Main Telemetry Chart -->
+      <div class="glass-bright" style="padding:28px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+          <div>
+            <h2 class="font-display" style="font-size:1.3rem;font-weight:700;color:#e2f0ff;">Telemetri Real-Time</h2>
+            <p style="color:rgba(180,210,245,0.4);font-size:13px;margin-top:3px;">Suhu, CO₂, dan Daya — 60 detik terakhir</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="live-pulse"></div>
+            <span style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,100,100,0.7);">LIVE</span>
+          </div>
+        </div>
+        <canvas id="sensorChart" height="120"></canvas>
+      </div>
+
+      <!-- Gauge / Donut -->
+      <div class="glass-bright" style="padding:28px;">
+        <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;margin-bottom:20px;">Distribusi Energi</h2>
+        <canvas id="energyDonut" height="170"></canvas>
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:#00d4e8;"></div><span style="color:rgba(200,225,245,0.7);">AC Central</span></div>
+            <span class="font-mono" style="font-size:11px;color:#e2f0ff;" id="acPercent">65%</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:#fde047;"></div><span style="color:rgba(200,225,245,0.7);">Pencahayaan</span></div>
+            <span class="font-mono" style="font-size:11px;color:#e2f0ff;" id="lightPercent">20%</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:#00e5a0;"></div><span style="color:rgba(200,225,245,0.7);">IoT Nodes</span></div>
+            <span class="font-mono" style="font-size:11px;color:#e2f0ff;">3%</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:#a855f7;"></div><span style="color:rgba(200,225,245,0.7);">Lainnya</span></div>
+            <span class="font-mono" style="font-size:11px;color:#e2f0ff;" id="otherPercent">12%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Alerts Panel + Power Chart -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+      <!-- Recent Alerts -->
+      <div class="glass-bright" style="padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+          <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;">Notifikasi Sistem</h2>
+          <span class="badge badge-warn" id="alertCount">2 AKTIF</span>
+        </div>
+        <div id="alertsContainer"></div>
+      </div>
+
+      <!-- Voltage/Current Bar Chart -->
+      <div class="glass-bright" style="padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+          <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;">Power Quality Monitor</h2>
+          <span class="badge badge-info" id="pzemBadge">PZEM-004T</span>
+        </div>
+        <canvas id="powerChart" height="160"></canvas>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- ██████████ TAB: FAULT PREDICTION ██████████ -->
+  <section id="predict" class="tab-content">
+
+    <!-- Intro banner -->
+    <div style="background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(0,30,80,0.5));border:1px solid rgba(168,85,247,0.2);border-radius:16px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;gap:16px;">
+      <div style="width:44px;height:44px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fa-solid fa-brain" style="color:#a855f7;font-size:20px;"></i>
+      </div>
+      <div>
+        <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;margin-bottom:3px;">AI Predictive Maintenance Engine</div>
+        <div style="font-size:13px;color:rgba(180,210,245,0.5);">Mendeteksi anomali tegangan, arus, dan daya secara real-time. Model berbasis Z-Score + threshold adaptif terhadap baseline historis tiap perangkat.</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span>
+        <span style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(168,85,247,0.6);margin-left:6px;">ANALYZING</span>
+      </div>
+    </div>
+
+    <!-- Component Health Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-bottom:24px;" id="componentCards">
+      <!-- Dynamically filled by JS -->
+    </div>
+
+    <!-- Anomaly Chart + Details -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px;">
+
+      <div class="glass-bright" style="padding:28px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <h2 class="font-display" style="font-size:1.2rem;font-weight:700;color:#e2f0ff;">Tren Anomali Energi</h2>
+            <p style="color:rgba(180,210,245,0.4);font-size:12px;margin-top:3px;">Deteksi lonjakan arus/tegangan abnormal terhadap baseline</p>
+          </div>
+          <span class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;border:1px solid rgba(168,85,247,0.25);">LIVE ANOMALY SCAN</span>
+        </div>
+        <canvas id="anomalyChart" height="120"></canvas>
+      </div>
+
+      <!-- Risk Meter -->
+      <div class="glass-bright" style="padding:28px;">
+        <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;margin-bottom:20px;">Skor Risiko Komponen</h2>
+        <div id="riskMeter"></div>
+      </div>
+
+    </div>
+
+    <!-- Prediction Log Table -->
+    <div class="glass-bright" style="padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;">Log Prediksi Kerusakan</h2>
+        <span style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(0,212,232,0.4);">UPDATE SETIAP 30 DETIK</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="faultTable">
+          <thead>
+            <tr>
+              <th>Komponen</th>
+              <th>Ruangan</th>
+              <th>Anomali Terdeteksi</th>
+              <th>Nilai Saat Ini</th>
+              <th>Baseline</th>
+              <th>Deviasi</th>
+              <th>Status Prediksi</th>
+              <th>Urgensi</th>
+            </tr>
+          </thead>
+          <tbody id="faultTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ██████████ TAB: AI LOGIC ██████████ -->
+  <section id="logic" class="tab-content">
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:24px;">
+
+      <!-- SCD41 CO2 -->
+      <div class="glass-bright metric-card" style="padding:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:52px;height:52px;background:rgba(0,212,232,0.1);border:1px solid rgba(0,212,232,0.25);border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(0,212,232,0.1);">
+            <i class="fa-solid fa-wind" style="color:var(--cyan);font-size:22px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">SCD41 — Kadar CO₂</div>
+            <span class="badge badge-info" style="font-size:9px;margin-top:4px;display:inline-block;">DCV PROTOCOL</span>
+          </div>
+        </div>
+        <div style="space-y:12px;">
+          <div class="anomaly-card anomaly-normal glass" style="padding:14px;border-radius:12px;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><i class="fa-solid fa-circle-check" style="color:var(--emerald);font-size:12px;"></i><span style="font-size:12px;font-weight:600;color:var(--emerald);">CO₂ &lt; 600 ppm</span></div>
+            <p style="font-size:13px;color:rgba(180,210,245,0.65);line-height:1.6;">Damper AC tertutup, sirkulasi udara internal aktif. Hemat energi maksimal.</p>
+          </div>
+          <div class="anomaly-card anomaly-warn glass" style="padding:14px;border-radius:12px;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--amber);font-size:12px;"></i><span style="font-size:12px;font-weight:600;color:var(--amber);">600–1000 ppm</span></div>
+            <p style="font-size:13px;color:rgba(180,210,245,0.65);line-height:1.6;">Mode transisi. Damper membuka secara bertahap (25–50%).</p>
+          </div>
+          <div class="anomaly-card anomaly-critical glass" style="padding:14px;border-radius:12px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><i class="fa-solid fa-circle-xmark" style="color:var(--rose);font-size:12px;"></i><span style="font-size:12px;font-weight:600;color:var(--rose);">CO₂ &gt; 1000 ppm</span></div>
+            <p style="font-size:13px;color:rgba(180,210,245,0.65);line-height:1.6;">Damper terbuka penuh. Exhaust fan aktif. Notifikasi ke pengelola.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Temperature -->
+      <div class="glass-bright metric-card" style="padding:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:52px;height:52px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);border-radius:14px;display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-temperature-half" style="color:var(--emerald);font-size:22px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">Suhu & Kelembapan</div>
+            <span class="badge badge-ok" style="font-size:9px;margin-top:4px;display:inline-block;">SMART THERMOSTAT</span>
+          </div>
+        </div>
+        <div class="timeline-item" style="margin-top:10px;">
+          <div class="timeline-dot" style="background:rgba(245,166,35,0.1);border-color:var(--amber);"></div>
+          <div class="font-display" style="font-size:13px;font-weight:600;color:var(--amber);">Suhu &gt; 26°C</div>
+          <p style="font-size:12px;color:rgba(180,210,245,0.55);margin-top:3px;">Kompresor AC bekerja penuh. Setpoint diturunkan agresif.</p>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot" style="background:rgba(0,212,232,0.1);border-color:var(--cyan);"></div>
+          <div class="font-display" style="font-size:13px;font-weight:600;color:var(--cyan);">23–26°C</div>
+          <p style="font-size:12px;color:rgba(180,210,245,0.55);margin-top:3px;">Mode inverter efisien. AC mempertahankan suhu tanpa siklus penuh.</p>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot" style="background:rgba(0,229,160,0.1);border-color:var(--emerald);"></div>
+          <div class="font-display" style="font-size:13px;font-weight:600;color:var(--emerald);">Suhu &lt; 23°C</div>
+          <p style="font-size:12px;color:rgba(180,210,245,0.55);margin-top:3px;">AC standby. Suhu naik natural + fan sirkulasi aktif.</p>
+        </div>
+      </div>
+
+      <!-- BH1750 Light -->
+      <div class="glass-bright metric-card" style="padding:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:52px;height:52px;background:rgba(253,224,71,0.08);border:1px solid rgba(253,224,71,0.2);border-radius:14px;display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-sun" style="color:#fde047;font-size:22px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">BH1750 — Cahaya</div>
+            <span class="badge" style="background:rgba(253,224,71,0.1);color:#fde047;border:1px solid rgba(253,224,71,0.2);font-size:9px;margin-top:4px;display:inline-block;">DAYLIGHT HARVESTING</span>
+          </div>
+        </div>
+        <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=70"
+             alt="Smart lighting"
+             style="width:100%;height:110px;object-fit:cover;border-radius:10px;margin-bottom:14px;opacity:0.5;mix-blend-mode:luminosity;filter:saturate(0.6);">
+        <div style="font-size:13px;color:rgba(180,210,245,0.65);line-height:1.7;">
+          Jika <strong style="color:#fde047;">Lux tinggi</strong> (siang terik) → lampu <strong style="color:var(--emerald);">tidak menyala</strong>.<br>
+          Jika <strong style="color:#fde047;">Lux rendah</strong> (malam/mendung) → lampu otomatis menyala dengan intensitas adaptif.
+        </div>
+      </div>
+
+      <!-- HLK Occupancy -->
+      <div class="glass-bright metric-card" style="padding:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:52px;height:52px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:14px;display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-radar" style="color:#a855f7;font-size:22px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">HLK-LD2410 & PIR</div>
+            <span class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;border:1px solid rgba(168,85,247,0.2);font-size:9px;margin-top:4px;display:inline-block;">RADAR 24GHz + PIR</span>
+          </div>
+        </div>
+        <div class="glass" style="padding:14px;border-radius:12px;border-color:rgba(168,85,247,0.15);">
+          <p style="font-size:13px;color:rgba(180,210,245,0.65);line-height:1.7;">Sensor mendeteksi kehadiran manusia secara kontinu. Jika kelas <strong style="color:#a855f7;">kosong &gt; 20 menit</strong>, sistem otomatis mematikan AC, lampu, dan exhaust fan melalui relay.</p>
+        </div>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:10px;background:rgba(168,85,247,0.05);padding:12px;border-radius:10px;border:1px solid rgba(168,85,247,0.1);">
+          <i class="fa-solid fa-clock" style="color:#a855f7;"></i>
+          <span style="font-size:12px;color:rgba(200,180,255,0.7);">Timeout saat ini: <strong style="color:#a855f7;">20 menit</strong> (adjustable)</span>
+        </div>
+      </div>
+
+      <!-- PZEM Audit -->
+      <div class="glass-bright metric-card" style="padding:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:52px;height:52px;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);border-radius:14px;display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-plug-circle-check" style="color:var(--rose);font-size:22px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">PZEM-004T</div>
+            <span class="badge badge-warn" style="font-size:9px;margin-top:4px;display:inline-block;">ENERGY AUDITOR</span>
+          </div>
+        </div>
+        <div style="space-y:8px;">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(180,210,245,0.65);margin-bottom:8px;"><i class="fa-solid fa-check-circle" style="color:var(--emerald);width:16px;"></i>Validasi perintah relay (fault detection)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(180,210,245,0.65);margin-bottom:8px;"><i class="fa-solid fa-check-circle" style="color:var(--emerald);width:16px;"></i>Audit konsumsi kWh harian per ruangan</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(180,210,245,0.65);margin-bottom:8px;"><i class="fa-solid fa-check-circle" style="color:var(--emerald);width:16px;"></i>Deteksi perangkat boros (AC kompressor rusak)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(180,210,245,0.65);"><i class="fa-solid fa-check-circle" style="color:var(--emerald);width:16px;"></i>Laporan Green Campus (bukti kuantitatif)</div>
+        </div>
+      </div>
+
+      <!-- Skenario Kerja -->
+      <div class="glass-bright metric-card" style="padding:28px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:52px;height:52px;background:rgba(0,212,232,0.08);border:1px solid rgba(0,212,232,0.2);border-radius:14px;display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid fa-diagram-project" style="color:var(--cyan);font-size:20px;"></i>
+          </div>
+          <div>
+            <div class="font-display" style="font-weight:700;font-size:1rem;color:#e2f0ff;">Skenario Harian</div>
+            <span class="badge badge-info" style="font-size:9px;margin-top:4px;display:inline-block;">FULL-DAY FLOW</span>
+          </div>
+        </div>
+        <div style="space-y:0;">
+          <div class="timeline-item" style="font-size:12px;color:rgba(180,210,245,0.7);">
+            <div class="timeline-dot" style="background:rgba(0,229,160,0.2);border-color:var(--emerald);"></div>
+            <strong style="color:var(--emerald);">07:00</strong> — Sensor Okupansi aktif → AC & lampu bersiap
+          </div>
+          <div class="timeline-item" style="font-size:12px;color:rgba(180,210,245,0.7);">
+            <div class="timeline-dot" style="background:rgba(253,224,71,0.1);border-color:#fde047;"></div>
+            <strong style="color:#fde047;">07:05</strong> — BH1750 deteksi cerah → lampu tidak menyala
+          </div>
+          <div class="timeline-item" style="font-size:12px;color:rgba(180,210,245,0.7);">
+            <div class="timeline-dot" style="background:rgba(245,166,35,0.1);border-color:var(--amber);"></div>
+            <strong style="color:var(--amber);">12:00</strong> — SCD41 CO₂ &gt; 1000ppm → katup udara terbuka
+          </div>
+          <div class="timeline-item" style="font-size:12px;color:rgba(180,210,245,0.7);">
+            <div class="timeline-dot" style="background:rgba(255,77,109,0.1);border-color:var(--rose);"></div>
+            <strong style="color:var(--rose);">15:00</strong> — Kosong 20 menit → semua perangkat mati otomatis
+          </div>
+          <div class="timeline-item" style="font-size:12px;color:rgba(180,210,245,0.7);">
+            <div class="timeline-dot" style="background:rgba(168,85,247,0.1);border-color:#a855f7;"></div>
+            <strong style="color:#a855f7;">24:00</strong> — PZEM kirim laporan kWh harian ke server kampus
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Architecture diagram -->
+    <div class="glass-bright" style="padding:28px;">
+      <h2 class="font-display" style="font-size:1.2rem;font-weight:700;color:#e2f0ff;margin-bottom:20px;">Topologi Arsitektur IoT</h2>
+      <svg class="topo-svg" viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+        <!-- Sensor Layer -->
+        <text x="80" y="20" fill="rgba(0,212,232,0.4)" font-size="9" font-family="Space Mono,monospace" letter-spacing="2">SENSOR LAYER</text>
+        <g transform="translate(20,40)">
+          <!-- SCD41 -->
+          <rect x="0" y="0" width="80" height="50" rx="8" fill="rgba(0,30,60,0.8)" stroke="rgba(0,212,232,0.3)" stroke-width="1"/>
+          <text x="40" y="18" text-anchor="middle" fill="rgba(0,212,232,0.8)" font-size="8" font-family="Space Mono,monospace">SCD41</text>
+          <text x="40" y="30" text-anchor="middle" fill="rgba(180,210,245,0.4)" font-size="7" font-family="DM Sans,sans-serif">CO₂/Temp/RH</text>
+          <circle cx="40" cy="43" r="3" fill="rgba(0,212,232,0.5)"><animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/></circle>
+        </g>
+        <g transform="translate(120,40)">
+          <rect x="0" y="0" width="80" height="50" rx="8" fill="rgba(0,30,60,0.8)" stroke="rgba(253,224,71,0.3)" stroke-width="1"/>
+          <text x="40" y="18" text-anchor="middle" fill="rgba(253,224,71,0.8)" font-size="8" font-family="Space Mono,monospace">BH1750</text>
+          <text x="40" y="30" text-anchor="middle" fill="rgba(180,210,245,0.4)" font-size="7">Light Intensity</text>
+          <circle cx="40" cy="43" r="3" fill="rgba(253,224,71,0.5)"><animate attributeName="opacity" values="1;0.2;1" dur="2.5s" repeatCount="indefinite"/></circle>
+        </g>
+        <g transform="translate(220,40)">
+          <rect x="0" y="0" width="80" height="50" rx="8" fill="rgba(0,30,60,0.8)" stroke="rgba(168,85,247,0.3)" stroke-width="1"/>
+          <text x="40" y="18" text-anchor="middle" fill="rgba(168,85,247,0.8)" font-size="8" font-family="Space Mono,monospace">HLK-LD2410</text>
+          <text x="40" y="30" text-anchor="middle" fill="rgba(180,210,245,0.4)" font-size="7">Occupancy Radar</text>
+          <circle cx="40" cy="43" r="3" fill="rgba(168,85,247,0.5)"><animate attributeName="opacity" values="1;0.2;1" dur="1.8s" repeatCount="indefinite"/></circle>
+        </g>
+        <g transform="translate(320,40)">
+          <rect x="0" y="0" width="80" height="50" rx="8" fill="rgba(0,30,60,0.8)" stroke="rgba(255,77,109,0.3)" stroke-width="1"/>
+          <text x="40" y="18" text-anchor="middle" fill="rgba(255,77,109,0.8)" font-size="8" font-family="Space Mono,monospace">PZEM-004T</text>
+          <text x="40" y="30" text-anchor="middle" fill="rgba(180,210,245,0.4)" font-size="7">V/I/P/kWh</text>
+          <circle cx="40" cy="43" r="3" fill="rgba(255,77,109,0.5)"><animate attributeName="opacity" values="1;0.2;1" dur="3s" repeatCount="indefinite"/></circle>
+        </g>
+
+        <!-- Connections to ESP32 -->
+        <line x1="60" y1="90" x2="505" y2="170" stroke="rgba(0,212,232,0.2)" stroke-width="1" stroke-dasharray="4 4"><animate attributeName="stroke-dashoffset" values="0;-16" dur="1s" repeatCount="indefinite"/></line>
+        <line x1="160" y1="90" x2="505" y2="170" stroke="rgba(253,224,71,0.15)" stroke-width="1" stroke-dasharray="4 4"><animate attributeName="stroke-dashoffset" values="0;-16" dur="1.2s" repeatCount="indefinite"/></line>
+        <line x1="260" y1="90" x2="505" y2="170" stroke="rgba(168,85,247,0.15)" stroke-width="1" stroke-dasharray="4 4"><animate attributeName="stroke-dashoffset" values="0;-16" dur="0.8s" repeatCount="indefinite"/></line>
+        <line x1="360" y1="90" x2="505" y2="170" stroke="rgba(255,77,109,0.15)" stroke-width="1" stroke-dasharray="4 4"><animate attributeName="stroke-dashoffset" values="0;-16" dur="1.5s" repeatCount="indefinite"/></line>
+
+        <!-- ESP32 -->
+        <text x="480" y="155" fill="rgba(0,212,232,0.4)" font-size="9" font-family="Space Mono,monospace" letter-spacing="2">EDGE</text>
+        <rect x="460" y="165" width="90" height="65" rx="10" fill="rgba(0,40,80,0.9)" stroke="rgba(0,212,232,0.5)" stroke-width="1.5"/>
+        <text x="505" y="187" text-anchor="middle" fill="rgba(0,212,232,0.9)" font-size="9" font-family="Space Mono,monospace">ESP32</text>
+        <text x="505" y="200" text-anchor="middle" fill="rgba(180,210,245,0.5)" font-size="7">WiFi 2.4GHz</text>
+        <text x="505" y="214" text-anchor="middle" fill="rgba(0,212,232,0.6)" font-size="7">MQTT Client</text>
+        <circle cx="505" cy="225" r="4" fill="rgba(0,212,232,0.3)" stroke="rgba(0,212,232,0.7)" stroke-width="1">
+          <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite"/>
+        </circle>
+
+        <!-- Connection to Cloud -->
+        <line x1="550" y1="197" x2="640" y2="197" stroke="rgba(0,212,232,0.3)" stroke-width="1.5" stroke-dasharray="5 3"><animate attributeName="stroke-dashoffset" values="0;-16" dur="0.8s" repeatCount="indefinite"/></line>
+
+        <!-- Cloud/Server -->
+        <text x="630" y="155" fill="rgba(0,212,232,0.4)" font-size="9" font-family="Space Mono,monospace" letter-spacing="2">CLOUD</text>
+        <rect x="635" y="165" width="90" height="65" rx="10" fill="rgba(0,40,80,0.9)" stroke="rgba(0,229,160,0.4)" stroke-width="1.5"/>
+        <text x="680" y="187" text-anchor="middle" fill="rgba(0,229,160,0.9)" font-size="9" font-family="Space Mono,monospace">MQTT</text>
+        <text x="680" y="200" text-anchor="middle" fill="rgba(180,210,245,0.5)" font-size="7">Node-RED</text>
+        <text x="680" y="214" text-anchor="middle" fill="rgba(0,229,160,0.6)" font-size="7">InfluxDB</text>
+
+        <!-- Connection to Dashboard -->
+        <line x1="725" y1="197" x2="800" y2="197" stroke="rgba(0,229,160,0.25)" stroke-width="1.5" stroke-dasharray="5 3"><animate attributeName="stroke-dashoffset" values="0;-16" dur="0.9s" repeatCount="indefinite"/></line>
+
+        <!-- Dashboard -->
+        <text x="790" y="155" fill="rgba(0,212,232,0.4)" font-size="9" font-family="Space Mono,monospace" letter-spacing="2">DASH</text>
+        <rect x="790" y="165" width="90" height="65" rx="10" fill="rgba(0,40,80,0.9)" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+        <text x="835" y="187" text-anchor="middle" fill="rgba(168,85,247,0.9)" font-size="9" font-family="Space Mono,monospace">Grafana</text>
+        <text x="835" y="200" text-anchor="middle" fill="rgba(180,210,245,0.5)" font-size="7">Dashboard</text>
+        <text x="835" y="214" text-anchor="middle" fill="rgba(168,85,247,0.6)" font-size="7">AI Predict</text>
+
+        <!-- Relay/Actuator from ESP32 -->
+        <line x1="505" y1="230" x2="505" y2="265" stroke="rgba(255,77,109,0.3)" stroke-width="1.5" stroke-dasharray="4 3"><animate attributeName="stroke-dashoffset" values="0;-14" dur="1s" repeatCount="indefinite"/></line>
+        <text x="420" y="262" fill="rgba(255,77,109,0.4)" font-size="9" font-family="Space Mono,monospace" letter-spacing="2">ACTUATOR LAYER</text>
+        <rect x="430" y="265" width="60" height="32" rx="6" fill="rgba(30,0,20,0.8)" stroke="rgba(255,77,109,0.3)" stroke-width="1"/>
+        <text x="460" y="285" text-anchor="middle" fill="rgba(255,77,109,0.8)" font-size="7" font-family="Space Mono,monospace">AC Relay</text>
+        <rect x="500" y="265" width="60" height="32" rx="6" fill="rgba(20,15,0,0.8)" stroke="rgba(253,224,71,0.3)" stroke-width="1"/>
+        <text x="530" y="285" text-anchor="middle" fill="rgba(253,224,71,0.8)" font-size="7" font-family="Space Mono,monospace">Light PWM</text>
+        <rect x="570" y="265" width="70" height="32" rx="6" fill="rgba(0,20,30,0.8)" stroke="rgba(0,212,232,0.3)" stroke-width="1"/>
+        <text x="605" y="285" text-anchor="middle" fill="rgba(0,212,232,0.8)" font-size="7" font-family="Space Mono,monospace">IR Blaster</text>
+      </svg>
+    </div>
+
+  </section>
+
+  <!-- ██████████ TAB: ENERGY AUDIT ██████████ -->
+  <section id="energy" class="tab-content">
+
+    <!-- Energy KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid var(--cyan);">
+        <div class="section-label" style="margin-bottom:10px;">TEGANGAN</div>
+        <div class="value-display neon-cyan" id="voltageValue">220.0V</div>
+        <div style="margin-top:8px;font-size:12px;color:rgba(180,210,245,0.4);">Nominal 220V AC</div>
+      </div>
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid var(--emerald);">
+        <div class="section-label" style="margin-bottom:10px;color:rgba(0,229,160,0.5);">ARUS</div>
+        <div class="value-display neon-emerald" id="currentValue">1.20A</div>
+        <div style="margin-top:8px;font-size:12px;color:rgba(180,210,245,0.4);">Baseline: 1.2–1.5A</div>
+      </div>
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid var(--amber);">
+        <div class="section-label" style="margin-bottom:10px;color:rgba(245,166,35,0.5);">DAYA</div>
+        <div class="value-display neon-amber" id="powerValue">320W</div>
+        <div style="margin-top:8px;font-size:12px;color:rgba(180,210,245,0.4);">Max expected: 400W</div>
+      </div>
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid var(--rose);">
+        <div class="section-label" style="margin-bottom:10px;color:rgba(255,77,109,0.5);">ENERGI HARI INI</div>
+        <div class="value-display" style="color:var(--rose);text-shadow:0 0 20px rgba(255,77,109,0.5);" id="energyValue">14.20 kWh</div>
+      </div>
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid #a855f7;">
+        <div class="section-label" style="margin-bottom:10px;color:rgba(168,85,247,0.5);">BIAYA HARI INI</div>
+        <div class="value-display" style="color:#a855f7;text-shadow:0 0 20px rgba(168,85,247,0.5);font-size:1.8rem;" id="costValue">Rp 21.300</div>
+      </div>
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid var(--emerald);">
+        <div class="section-label" style="margin-bottom:10px;color:rgba(0,229,160,0.5);">HEMAT BULAN INI</div>
+        <div class="value-display neon-emerald" style="font-size:1.8rem;" id="savedValue">Rp 340K</div>
+      </div>
+
+      <!-- ── TAMBAHKAN 2 KARTU INI ── -->
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid var(--cyan);">
+        <div class="section-label" style="margin-bottom:10px;">FREKUENSI</div>
+        <div class="value-display neon-cyan" id="frequencyValue">50.0 Hz</div>
+        <div style="margin-top:8px;font-size:12px;color:rgba(180,210,245,0.4);">Nominal 50 Hz</div>
+      </div>
+      <div class="glass metric-card" style="padding:22px;border-bottom:3px solid #a855f7;">
+        <div class="section-label" style="margin-bottom:10px;color:rgba(168,85,247,0.5);">POWER FACTOR</div>
+        <div class="value-display" style="color:#a855f7;text-shadow:0 0 20px rgba(168,85,247,0.5);" id="pfValue">1.00</div>
+        <div style="margin-top:8px;font-size:12px;color:rgba(180,210,245,0.4);">Ideal: &gt; 0.85</div>
+      </div>
+      <!-- ── SELESAI ── -->
+    </div>
+
+    <!-- Energy Trend + ROI -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px;">
+      <div class="glass-bright" style="padding:28px;">
+        <h2 class="font-display" style="font-size:1.2rem;font-weight:700;color:#e2f0ff;margin-bottom:6px;">Tren Konsumsi Energi — 7 Hari</h2>
+        <p style="font-size:12px;color:rgba(180,210,245,0.4);margin-bottom:20px;">Perbandingan sebelum dan sesudah implementasi IoT</p>
+        <canvas id="energyTrendChart" height="130"></canvas>
+      </div>
+      <div class="glass-bright" style="padding:28px;">
+        <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;margin-bottom:20px;">ROI Analysis</h2>
+        <div style="text-align:center;margin-bottom:20px;">
+          <img src="https://images.unsplash.com/photo-1466611653911-95081537e5b7?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=60"
+               alt="Solar panel green energy"
+               style="width:100%;height:100px;object-fit:cover;border-radius:12px;opacity:0.45;mix-blend-mode:luminosity;filter:saturate(0.5);">
+        </div>
+        <div style="background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:12px;padding:16px;">
+          <div style="font-size:12px;color:rgba(180,210,245,0.55);margin-bottom:10px;line-height:1.6;">Biaya IoT/kelas/bulan:</div>
+          <div class="font-mono" style="font-size:1.4rem;color:var(--emerald);">Rp 3.240</div>
+          <div class="glow-divider"></div>
+          <div style="font-size:12px;color:rgba(180,210,245,0.55);margin-bottom:6px;">AC lupa mati 1 malam:</div>
+          <div class="font-mono" style="font-size:1.4rem;color:var(--rose);">Rp 27.000</div>
+          <div class="glow-divider"></div>
+          <div style="font-size:11px;color:rgba(0,229,160,0.7);font-style:italic;">1 malam = 8 bulan operasional IoT</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-room consumption table -->
+    <div class="glass-bright" style="padding:24px;">
+      <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;margin-bottom:18px;">Konsumsi Per Ruangan — Hari Ini</h2>
+      <table id="roomEnergyTable">
+        <thead>
+          <tr><th>Ruangan</th><th>Daya Rata-rata</th><th>Total kWh</th><th>Biaya (Rp)</th><th>Status AC</th><th>Efisiensi</th></tr>
+        </thead>
+        <tbody id="roomEnergyBody"></tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <!-- ██████████ TAB: ROOM MAP ██████████ -->
+  <section id="rooms" class="tab-content">
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
+
+      <div class="glass-bright" style="padding:28px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">
+          <h2 class="font-display" style="font-size:1.2rem;font-weight:700;color:#e2f0ff;">Peta Gedung — Lantai 3 · F3.1 s/d F3.16</h2>
+          <div style="display:flex;gap:10px;">
+            <span style="font-size:11px;color:rgba(180,210,245,0.4);display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--emerald);opacity:0.7;"></div>Aktif</span>
+            <span style="font-size:11px;color:rgba(180,210,245,0.4);display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--amber);opacity:0.7;"></div>Peringatan</span>
+            <span style="font-size:11px;color:rgba(180,210,245,0.4);display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--rose);opacity:0.7;"></div>Kritis</span>
+            <span style="font-size:11px;color:rgba(180,210,245,0.4);display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:2px;background:rgba(100,150,200,0.3);"></div>Kosong</span>
+          </div>
+        </div>
+
+        <!-- Building illustration -->
+        <div style="position:relative;margin-bottom:20px;border-radius:12px;overflow:hidden;">
+          <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=60"
+               alt="Building floor plan"
+               style="width:100%;height:130px;object-fit:cover;opacity:0.2;filter:grayscale(0.8);">
+          <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent,rgba(2,11,24,0.8));pointer-events:none;"></div>
+          <div style="position:absolute;bottom:10px;left:14px;font-family:'Space Mono',monospace;font-size:10px;color:rgba(0,212,232,0.6);">GEDUNG FILKOM — LANTAI 3 — F3.1 s/d F3.16</div>
+        </div>
+
+        <!-- Room grid -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;" id="roomGrid"></div>
+
+        <div class="glow-divider"></div>
+
+        <!-- Legend info -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:12px;color:rgba(180,210,245,0.5);">
+          <div style="display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-users" style="color:var(--emerald);width:14px;"></i> <span id="activeRoomCount" class="font-mono" style="color:var(--emerald);">8</span> ruang aktif</div>
+          <div style="display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--amber);width:14px;"></i> <span id="warnRoomCount" class="font-mono" style="color:var(--amber);">2</span> peringatan</div>
+          <div style="display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-circle-xmark" style="color:var(--rose);width:14px;"></i> <span id="critRoomCount" class="font-mono" style="color:var(--rose);">1</span> kritis</div>
+        </div>
+      </div>
+
+      <!-- Room detail panel -->
+      <div class="glass-bright" style="padding:24px;">
+        <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;margin-bottom:18px;">Detail Ruangan</h2>
+        <div id="roomDetail">
+          <div style="text-align:center;padding:30px 0;color:rgba(180,210,245,0.3);">
+            <i class="fa-solid fa-hand-pointer" style="font-size:28px;margin-bottom:10px;display:block;"></i>
+            <span style="font-size:13px;">Klik ruangan pada peta</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ██████████ TAB: CONTROL ██████████ -->
+  <section id="control" class="tab-content">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+
+      <!-- Threshold sliders -->
+      <div class="glass-bright" style="padding:28px;">
+        <h2 class="font-display" style="font-size:1.2rem;font-weight:700;color:#e2f0ff;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border);">Smart Threshold Parameters</h2>
+        <div style="space-y:20px;">
+          <div style="margin-bottom:24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:14px;color:rgba(200,225,245,0.8);">Sensitivitas Cahaya (Lux)</span>
+              <span id="luxThreshold" class="badge badge-info" style="font-size:13px;padding:4px 12px;">50 Lx</span>
+            </div>
+            <input type="range" min="10" max="200" value="50" id="luxSlider" style="width:100%;background:linear-gradient(to right,var(--cyan) 22%,rgba(255,255,255,0.1) 22%);accent-color:var(--cyan);">
+          </div>
+          <div style="margin-bottom:24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:14px;color:rgba(200,225,245,0.8);">Target Suhu AC (°C)</span>
+              <span id="tempThreshold" class="badge badge-ok" style="font-size:13px;padding:4px 12px;">26°C</span>
+            </div>
+            <input type="range" min="18" max="35" value="26" id="tempSlider" style="width:100%;background:linear-gradient(to right,var(--emerald) 47%,rgba(255,255,255,0.1) 47%);accent-color:var(--emerald);">
+          </div>
+          <div style="margin-bottom:24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:14px;color:rgba(200,225,245,0.8);">CO₂ Threshold (ppm)</span>
+              <span id="co2Threshold" class="badge badge-warn" style="font-size:13px;padding:4px 12px;">1000 ppm</span>
+            </div>
+            <input type="range" min="400" max="2000" value="1000" id="co2Slider" style="width:100%;background:linear-gradient(to right,var(--amber) 35%,rgba(255,255,255,0.1) 35%);accent-color:var(--amber);">
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:14px;color:rgba(200,225,245,0.8);">Timeout Kosong (menit)</span>
+              <span id="timeoutThreshold" class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;border:1px solid rgba(168,85,247,0.25);font-size:13px;padding:4px 12px;">20 mnt</span>
+            </div>
+            <input type="range" min="5" max="60" value="20" id="timeoutSlider" style="width:100%;background:linear-gradient(to right,#a855f7 25%,rgba(255,255,255,0.1) 25%);accent-color:#a855f7;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Override -->
+      <div class="glass-bright" style="padding:28px;">
+        <h2 class="font-display" style="font-size:1.2rem;font-weight:700;color:#e2f0ff;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border);">Manual Override Panel</h2>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,50,80,0.3);padding:16px;border-radius:14px;border:1px solid rgba(0,212,232,0.1);">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:#e2f0ff;">Sistem Pencahayaan</div>
+              <div style="font-size:12px;color:rgba(180,210,245,0.4);margin-top:2px;">BH1750 Adaptive</div>
+            </div>
+            <button id="lampToggle" onclick="toggleDevice(this,'lamp')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;padding:10px 20px;border-radius:10px;background:rgba(0,229,160,0.1);color:var(--emerald);border:1px solid rgba(0,229,160,0.3);cursor:pointer;transition:all 0.3s;letter-spacing:0.05em;">AUTO</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,50,80,0.3);padding:16px;border-radius:14px;border:1px solid rgba(0,212,232,0.1);">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:#e2f0ff;">AC Central</div>
+              <div style="font-size:12px;color:rgba(180,210,245,0.4);margin-top:2px;">HLK-LD2410 + PIR</div>
+            </div>
+            <button id="acToggle" onclick="toggleDevice(this,'ac')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;padding:10px 20px;border-radius:10px;background:rgba(0,229,160,0.1);color:var(--emerald);border:1px solid rgba(0,229,160,0.3);cursor:pointer;transition:all 0.3s;letter-spacing:0.05em;">AUTO</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,50,80,0.3);padding:16px;border-radius:14px;border:1px solid rgba(0,212,232,0.1);">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:#e2f0ff;">Exhaust Fan / Damper</div>
+              <div style="font-size:12px;color:rgba(180,210,245,0.4);margin-top:2px;">SCD41 DCV Control</div>
+            </div>
+            <button id="fanToggle" onclick="toggleDevice(this,'fan')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;padding:10px 20px;border-radius:10px;background:rgba(0,229,160,0.1);color:var(--emerald);border:1px solid rgba(0,229,160,0.3);cursor:pointer;transition:all 0.3s;letter-spacing:0.05em;">AUTO</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,50,80,0.3);padding:16px;border-radius:14px;border:1px solid rgba(0,212,232,0.1);">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:#e2f0ff;">IR Blaster (Remot AC)</div>
+              <div style="font-size:12px;color:rgba(180,210,245,0.4);margin-top:2px;">Infrared Emitter</div>
+            </div>
+            <button id="irToggle" onclick="toggleDevice(this,'ir')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;padding:10px 20px;border-radius:10px;background:rgba(0,229,160,0.1);color:var(--emerald);border:1px solid rgba(0,229,160,0.3);cursor:pointer;transition:all 0.3s;letter-spacing:0.05em;">AUTO</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Schedule config -->
+    <div class="glass-bright" style="padding:28px;">
+      <h2 class="font-display" style="font-size:1.1rem;font-weight:700;color:#e2f0ff;margin-bottom:20px;">Jadwal Operasional Kelas</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;" id="scheduleGrid"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- ══════════════════════════════ FOOTER ══════════════════════════════ -->
+<footer style="border-top:1px solid var(--border);padding:20px 32px;background:rgba(2,11,24,0.9);">
+  <div style="max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:gap;gap:14px;">
+    <div style="font-family:'Space Mono',monospace;font-size:11px;color:rgba(0,212,232,0.4);">Tertia Najwa · Anugerah Bhumi · Rahandhika Keysha</div>
+    <div style="font-family:'Space Mono',monospace;font-size:11px;color:rgba(180,210,245,0.3);">SHAKESPEARE pernah ikut TEKRA 2026</div>
+  </div>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  SHAKESPEARE DASHBOARD ENGINE
+// ═══════════════════════════════════════════════════
+
+// --- TAB NAVIGATION ---
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+});
+function activateTab(id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const btn = document.querySelector(`[data-tab="${id}"]`);
+  if(btn) btn.classList.add('active');
+  const sec = document.getElementById(id);
+  if(sec) sec.classList.add('active');
+}
+
+// --- CHART GLOBAL SETUP ---
+Chart.defaults.color = 'rgba(180,210,245,0.5)';
+Chart.defaults.font.family = "'Space Mono', monospace";
+Chart.defaults.font.size = 10;
+
+// ─── SENSOR CHART ───
+const sCtx = document.getElementById('sensorChart').getContext('2d');
+const gCyan = sCtx.createLinearGradient(0,0,0,300);
+gCyan.addColorStop(0,'rgba(0,212,232,0.35)'); gCyan.addColorStop(1,'rgba(0,212,232,0)');
+const gAmber = sCtx.createLinearGradient(0,0,0,300);
+gAmber.addColorStop(0,'rgba(245,166,35,0.3)'); gAmber.addColorStop(1,'rgba(245,166,35,0)');
+const gRose = sCtx.createLinearGradient(0,0,0,300);
+gRose.addColorStop(0,'rgba(255,77,109,0.25)'); gRose.addColorStop(1,'rgba(255,77,109,0)');
+
+const sensorChart = new Chart(sCtx, {
+  type: 'line',
+  data: { labels: [],
+    datasets: [
+      { label:'Suhu (°C)', data:[], borderColor:'#00d4e8', backgroundColor:gCyan, borderWidth:2, pointRadius:2, pointHoverRadius:5, tension:0.4, fill:true },
+      { label:'CO₂ (ppm/10)', data:[], borderColor:'#f5a623', backgroundColor:gAmber, borderWidth:2, pointRadius:2, pointHoverRadius:5, tension:0.4, fill:true },
+      { label:'Daya (W/10)', data:[], borderColor:'#ff4d6d', backgroundColor:gRose, borderWidth:2, pointRadius:2, pointHoverRadius:5, tension:0.4, fill:true }
+    ]
+  },
+  options: {
+    responsive:true, animation:{duration:300},
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:'rgba(180,210,245,0.6)',usePointStyle:true,boxWidth:6,font:{size:10}}},
+      tooltip:{backgroundColor:'rgba(5,20,45,0.95)',borderColor:'rgba(0,212,232,0.2)',borderWidth:1,padding:12}},
+    scales:{
+      x:{grid:{color:'rgba(0,212,232,0.04)'},ticks:{font:{size:9}}},
+      y:{grid:{color:'rgba(0,212,232,0.04)'},ticks:{font:{size:9}}}
+    }
+  }
+});
+
+// ─── ENERGY DONUT ───
+const donutChart = new Chart(document.getElementById('energyDonut').getContext('2d'), {
+  type:'doughnut',
+  data:{
+    labels:['AC Central','Pencahayaan','IoT Nodes','Lainnya'],
+    datasets:[{data:[65,20,3,12],backgroundColor:['rgba(0,212,232,0.7)','rgba(253,224,71,0.7)','rgba(0,229,160,0.7)','rgba(168,85,247,0.7)'],borderWidth:0,hoverOffset:6}]
+  },
+  options:{responsive:true,cutout:'72%',plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(5,20,45,0.95)',borderColor:'rgba(0,212,232,0.2)',borderWidth:1}}}
+});
+
+// ─── POWER CHART ───
+const powerChart = new Chart(document.getElementById('powerChart').getContext('2d'), {
+  type:'bar',
+  data:{
+    labels:['V(x1)','I(x150)','P(x0.75)','kWh(x20)'],
+    datasets:[{
+      data:[220,180,240,284],
+      backgroundColor:['rgba(0,212,232,0.5)','rgba(0,229,160,0.5)','rgba(245,166,35,0.5)','rgba(255,77,109,0.5)'],
+      borderColor:['#00d4e8','#00e5a0','#f5a623','#ff4d6d'],
+      borderWidth:1, borderRadius:6
+    }]
+  },
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(0,212,232,0.04)'}},y:{grid:{color:'rgba(0,212,232,0.04)'},beginAtZero:true}}}
+});
+
+// ─── ANOMALY CHART ───
+const anomCtx = document.getElementById('anomalyChart').getContext('2d');
+const anomalyChart = new Chart(anomCtx, {
+  type:'line',
+  data:{
+    labels:[],
+    datasets:[
+      { label:'Arus Aktual (A)', data:[], borderColor:'#00d4e8', backgroundColor:'rgba(0,212,232,0.08)', borderWidth:2, pointRadius:2, tension:0.4, fill:true },
+      { label:'Baseline (A)', data:[], borderColor:'rgba(0,229,160,0.5)', borderDash:[5,4], borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+      { label:'Anomali Spike', data:[], borderColor:'rgba(255,77,109,0)', backgroundColor:'rgba(255,77,109,0)', pointRadius:6, pointBackgroundColor:'#ff4d6d', pointBorderColor:'#ff4d6d', showLine:false }
+    ]
+  },
+  options:{
+    responsive:true, animation:{duration:300},
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:'rgba(180,210,245,0.6)',usePointStyle:true,boxWidth:6,font:{size:10}}},tooltip:{backgroundColor:'rgba(5,20,45,0.95)',borderWidth:1,borderColor:'rgba(0,212,232,0.2)',padding:10}},
+    scales:{x:{grid:{color:'rgba(0,212,232,0.03)'},ticks:{font:{size:9}}},y:{grid:{color:'rgba(0,212,232,0.03)'},ticks:{font:{size:9}}}}
+  }
+});
+
+// ─── ENERGY TREND CHART ───
+const energyTrendChart = new Chart(document.getElementById('energyTrendChart').getContext('2d'), {
+  type:'bar',
+  data:{
+    labels:['Sen','Sel','Rab','Kam','Jum','Sab','Ming'],
+    datasets:[
+      { label:'Sebelum IoT (kWh)', data:[42,45,40,48,44,20,12], backgroundColor:'rgba(255,77,109,0.25)', borderColor:'rgba(255,77,109,0.6)', borderWidth:1.5, borderRadius:4 },
+      { label:'Setelah IoT (kWh)', data:[28,30,27,31,29,13,8], backgroundColor:'rgba(0,212,232,0.25)', borderColor:'rgba(0,212,232,0.6)', borderWidth:1.5, borderRadius:4 }
+    ]
+  },
+  options:{responsive:true,plugins:{legend:{labels:{color:'rgba(180,210,245,0.6)',usePointStyle:true,boxWidth:6}}},scales:{x:{grid:{color:'rgba(0,212,232,0.03)'}},y:{grid:{color:'rgba(0,212,232,0.03)'},beginAtZero:true}}}
+});
+
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+let state = {
+  temp: 26.0,
+  humidity: 62,
+  co2: 700,
+  lux: 120,
+  voltage: 220.0,
+  current: 1.20,
+  power: 320,
+  energy: 14.20,
+  occupied: true,
+  lampBrightness: 100,
+  tick: 0,
+  frequency: 50.0,   // ← tambah
+  pf: 1.00,          // ← tambah
+  pzemOk: false,    
+  components: [
+    { id:'ac-lt3a', name:'AC Unit F3.1', room:'F3.1', voltage_base:220, current_base:6.5, power_base:1430, health:95, status:'normal', lastAnomaly:null },
+    { id:'ac-lt3b', name:'AC Unit F3.2', room:'F3.2', voltage_base:220, current_base:6.5, power_base:1430, health:72, status:'warn', lastAnomaly:'Arus +22% dari baseline' },
+    { id:'ac-lt3c', name:'AC Unit F3.3', room:'F3.3', voltage_base:220, current_base:6.5, power_base:1430, health:38, status:'critical', lastAnomaly:'Daya 2.1x baseline — kompresor degradasi' },
+    { id:'lamp-lt3a', name:'Lampu LED F3.1', room:'F3.1', voltage_base:220, current_base:0.45, power_base:99, health:99, status:'normal', lastAnomaly:null },
+    { id:'lamp-lt3b', name:'Lampu LED F3.2', room:'F3.2', voltage_base:220, current_base:0.45, power_base:99, health:88, status:'warn', lastAnomaly:'Fluktuasi tegangan ±8V' },
+    { id:'esp32-lt3', name:'ESP32 Node Lt.3', room:'F3.1-F3.6', voltage_base:5, current_base:0.20, power_base:1.0, health:100, status:'normal', lastAnomaly:null },
+  ],
+  anomalyLog: [],
+  rooms: Array.from({length:16},(_,i)=>({
+    id:`F3.${i+1}`,
+    liveData: i===0,   // F3.1 pakai data sensor nyata dari ESP32
+    occupied: i<8,
+    status: i===2?'critical':i===5||i===11?'warn':'normal',
+    temp: 24+Math.random()*4,
+    co2: 500+Math.random()*600,
+    humidity: 55+Math.random()*20,
+    lux: 100+Math.random()*300,
+    power: 200+Math.random()*200,
+    lamp: Math.random()>0.4
+  }))
+};
+
+// ═══════════════════════════════════════════════════
+//  ANOMALY DETECTION ENGINE
+// ═══════════════════════════════════════════════════
+function detectAnomaly(comp, current, power, voltage) {
+  const I_delta = Math.abs(current - comp.current_base) / comp.current_base;
+  const P_delta = Math.abs(power - comp.power_base) / comp.power_base;
+  const V_delta = Math.abs(voltage - comp.voltage_base) / comp.voltage_base;
+
+  // Z-score simplified
+  let severity = 'normal', desc = 'Normal', score = 0;
+  if(P_delta > 0.5) { severity='critical'; desc=`Daya ${(P_delta*100).toFixed(0)}% di atas baseline`; score=95; }
+  else if(I_delta > 0.3) { severity='critical'; desc=`Arus +${(I_delta*100).toFixed(0)}% dari baseline (relay/kontaktor error)`; score=80; }
+  else if(P_delta > 0.25 || I_delta > 0.15) { severity='warn'; desc=`Konsumsi abnormal: daya +${(P_delta*100).toFixed(0)}%`; score=50; }
+  else if(V_delta > 0.1) { severity='warn'; desc=`Tegangan tidak stabil: ±${(V_delta*220).toFixed(1)}V`; score=35; }
+  else { score = Math.round(I_delta*100 + P_delta*50); }
+
+  return {severity, desc, score, I_delta, P_delta, V_delta};
+}
+
+// ═══════════════════════════════════════════════════
+//  RENDER COMPONENTS
+// ═══════════════════════════════════════════════════
+function renderComponentCards() {
+  const container = document.getElementById('componentCards');
+  container.innerHTML = state.components.map(comp => {
+    // Simulate real-time values
+    const mult = comp.status==='critical'?1.9+Math.random()*0.4:comp.status==='warn'?1.2+Math.random()*0.15:0.95+Math.random()*0.1;
+    const I_now = +(comp.current_base * mult).toFixed(2);
+    const P_now = Math.round(comp.power_base * mult);
+    const V_now = +(comp.voltage_base + (Math.random()-0.5)*10).toFixed(1);
+    const anom = detectAnomaly(comp, I_now, P_now, V_now);
+    const health = comp.health - anom.score*0.3 + Math.random()*3;
+    comp.health = Math.max(0,Math.min(100,health));
+
+    const sColor = comp.status==='critical'?'var(--rose)':comp.status==='warn'?'var(--amber)':'var(--emerald)';
+    const sBadge = comp.status==='critical'?'badge-crit':comp.status==='warn'?'badge-warn':'badge-ok';
+    const sLabel = comp.status==='critical'?'KRITIS':comp.status==='warn'?'PERINGATAN':'NORMAL';
+
+    return `
+    <div class="glass-bright metric-card" style="padding:22px;border-top:2px solid ${sColor};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <div class="font-display" style="font-weight:700;font-size:0.95rem;color:#e2f0ff;">${comp.name}</div>
+          <div style="font-size:11px;color:rgba(180,210,245,0.4);margin-top:2px;font-family:'Space Mono',monospace;">ROOM ${comp.room}</div>
+        </div>
+        <span class="badge ${sBadge}">${sLabel}</span>
+      </div>
+
+      <!-- Health bar -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:11px;color:rgba(180,210,245,0.5);">Skor Kesehatan</span>
+          <span class="font-mono" style="font-size:11px;color:${sColor};">${Math.round(comp.health)}%</span>
+        </div>
+        <div class="health-bar">
+          <div class="health-bar-fill" style="width:${comp.health}%;background:${sColor};"></div>
+        </div>
+      </div>
+
+      <!-- Values -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div style="background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;text-align:center;">
+          <div style="font-size:9px;color:rgba(180,210,245,0.4);margin-bottom:3px;">ARUS</div>
+          <div class="font-mono" style="font-size:13px;color:${anom.I_delta>0.15?'var(--rose)':'#e2f0ff'};">${I_now}A</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;text-align:center;">
+          <div style="font-size:9px;color:rgba(180,210,245,0.4);margin-bottom:3px;">DAYA</div>
+          <div class="font-mono" style="font-size:13px;color:${anom.P_delta>0.25?'var(--rose)':anom.P_delta>0.1?'var(--amber)':'#e2f0ff'};">${P_now}W</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;text-align:center;">
+          <div style="font-size:9px;color:rgba(180,210,245,0.4);margin-bottom:3px;">TEGANGAN</div>
+          <div class="font-mono" style="font-size:13px;color:${anom.V_delta>0.05?'var(--amber)':'#e2f0ff'};">${V_now}V</div>
+        </div>
+      </div>
+
+      ${anom.severity!=='normal' ? `
+      <div style="background:rgba(255,77,109,0.06);border:1px solid rgba(255,77,109,0.2);border-radius:8px;padding:10px;display:flex;align-items:flex-start;gap:8px;">
+        <i class="fa-solid fa-triangle-exclamation" style="color:${sColor};font-size:12px;margin-top:1px;flex-shrink:0;"></i>
+        <span style="font-size:11px;color:rgba(220,180,180,0.8);line-height:1.5;">${anom.desc}</span>
+      </div>` : `
+      <div style="background:rgba(0,229,160,0.04);border:1px solid rgba(0,229,160,0.12);border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px;">
+        <i class="fa-solid fa-circle-check" style="color:var(--emerald);font-size:12px;"></i>
+        <span style="font-size:11px;color:rgba(150,220,180,0.7);">Semua parameter dalam batas normal</span>
+      </div>`}
+    </div>`;
+  }).join('');
+}
+
+function renderRiskMeter() {
+  const container = document.getElementById('riskMeter');
+  container.innerHTML = state.components.map(comp => {
+    const sColor = comp.status==='critical'?'var(--rose)':comp.status==='warn'?'var(--amber)':'var(--emerald)';
+    const risk = 100 - comp.health;
+    return `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+        <span style="font-size:11px;color:rgba(180,210,245,0.6);">${comp.name.replace('Lt.3','')}</span>
+        <span class="font-mono" style="font-size:10px;color:${sColor};">${Math.round(risk)}%</span>
+      </div>
+      <div class="pred-bar-track">
+        <div class="pred-bar-fill" style="width:${risk}%;background:${sColor};"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFaultTable() {
+  const tbody = document.getElementById('faultTableBody');
+  const rows = [];
+  state.components.forEach(comp => {
+    const mult = comp.status==='critical'?1.85+Math.random()*0.3:comp.status==='warn'?1.18+Math.random()*0.12:0.97+Math.random()*0.06;
+    const I_now = +(comp.current_base*mult).toFixed(2);
+    const P_now = Math.round(comp.power_base*mult);
+    const V_now = +(comp.voltage_base+(Math.random()-0.5)*8).toFixed(1);
+    const dev = (((I_now-comp.current_base)/comp.current_base)*100).toFixed(1);
+    const anom = detectAnomaly(comp,I_now,P_now,V_now);
+
+    const [sc,sp,sl] = comp.status==='critical'
+      ? ['rgba(255,77,109,0.1)','var(--rose)','SEGERA SERVICE']
+      : comp.status==='warn'
+      ? ['rgba(245,166,35,0.08)','var(--amber)','PANTAU KETAT']
+      : ['rgba(0,229,160,0.05)','var(--emerald)','NORMAL'];
+
+    const urg = comp.status==='critical'?'🔴 Kritis':comp.status==='warn'?'🟡 Sedang':'🟢 Rendah';
+
+    rows.push(`<tr style="background:${sc};">
+      <td style="font-weight:600;color:#e2f0ff;">${comp.name}</td>
+      <td class="font-mono" style="color:rgba(180,210,245,0.6);">${comp.room}</td>
+      <td style="font-size:12px;color:${sp};">${anom.desc}</td>
+      <td class="font-mono" style="color:${sp};">${I_now}A / ${P_now}W</td>
+      <td class="font-mono" style="color:rgba(180,210,245,0.5);">${comp.current_base}A / ${comp.power_base}W</td>
+      <td class="font-mono" style="color:${Math.abs(+dev)>15?'var(--rose)':Math.abs(+dev)>5?'var(--amber)':'var(--emerald)'};">${dev > 0?'+':''}${dev}%</td>
+      <td><span style="background:${sc};color:${sp};border:1px solid ${sp};padding:3px 8px;border-radius:5px;font-family:'Space Mono',monospace;font-size:10px;">${sl}</span></td>
+      <td style="font-size:12px;">${urg}</td>
+    </tr>`);
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  ROOM MAP
+// ═══════════════════════════════════════════════════
+function renderRoomGrid() {
+  const grid = document.getElementById('roomGrid');
+  grid.innerHTML = state.rooms.map(r => {
+    const cls = !r.occupied?'empty-room':r.status==='critical'?'crit-room':r.status==='warn'?'warn-room':'active-room';
+    const isLive = r.liveData && esp32Live;
+    const badge = isLive ? '<span style="position:absolute;top:-5px;right:-5px;width:8px;height:8px;border-radius:50%;background:var(--emerald);border:1px solid rgba(2,11,24,0.8);box-shadow:0 0 6px var(--emerald);"></span>' : '';
+    return `<div class="room-node ${cls}" onclick="showRoomDetail('${r.id}')" title="${r.id}" style="position:relative;font-size:9px;">${badge}${r.id}</div>`;
+  }).join('');
+}
+
+function showRoomDetail(id) {
+  const r = state.rooms.find(x=>x.id===id);
+  if(!r) return;
+  const sColor = !r.occupied?'rgba(150,180,220,0.4)':r.status==='critical'?'var(--rose)':r.status==='warn'?'var(--amber)':'var(--emerald)';
+  const isLive = r.liveData && esp32Live;
+  const liveTag = isLive ? `<span class="badge badge-ok" style="margin-left:8px;animation:blink 2s infinite;">⬤ LIVE</span>` : '';
+  const srcTag  = isLive ? `<div style="font-family:'Space Mono',monospace;font-size:9px;color:rgba(0,229,160,0.4);margin-top:4px;letter-spacing:0.1em;">DATA SENSOR · ESP32 REAL-TIME</div>` : '';
+
+  // Nilai: F3.1 pakai state global (dari ESP32), yang lain pakai nilai di objek room
+  const tempVal = isLive ? state.temp.toFixed(1) : r.temp.toFixed(1);
+  const co2Val  = isLive ? Math.round(state.co2) : Math.round(r.co2);
+  const humVal  = isLive ? state.humidity.toFixed(1) : (r.humidity||60).toFixed(1);
+  const luxVal  = isLive ? Math.round(state.lux) : Math.round(r.lux||200);
+  const occVal  = isLive ? state.occupied : r.occupied;
+  const radarInfo = isLive && esp32Live ? `
+        <div class="glass" style="padding:12px;border-radius:10px;grid-column:span 2;border:1px solid rgba(0,229,160,0.15);">
+          <div style="font-size:9px;color:rgba(0,229,160,0.5);margin-bottom:6px;font-family:'Space Mono',monospace;">RADAR LD2410 — DETAIL</div>
+          <div id="roomDetailRadar" style="font-size:12px;color:rgba(180,210,245,0.6);line-height:1.8;"></div>
+        </div>` : '';
+
+  document.getElementById('roomDetail').innerHTML = `
+    <div style="border-top:3px solid ${sColor};border-radius:10px;padding:16px 0 0;">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+        <div class="font-display" style="font-size:1.1rem;font-weight:800;color:#e2f0ff;">Ruangan ${id}</div>
+        ${liveTag}
+      </div>
+      ${srcTag}
+      <div style="margin:10px 0 14px;display:flex;gap:6px;flex-wrap:wrap;">
+        <span class="badge ${!occVal?'badge-info':r.status==='critical'?'badge-crit':r.status==='warn'?'badge-warn':'badge-ok'}">${!occVal?'KOSONG':r.status==='critical'?'KRITIS':r.status==='warn'?'PERINGATAN':'AKTIF'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="glass" style="padding:12px;border-radius:10px;${isLive?'border-color:rgba(0,212,232,0.2);':''}">
+          <div style="font-size:9px;color:rgba(0,212,232,0.5);margin-bottom:4px;font-family:'Space Mono',monospace;">SUHU ${isLive?'🌡️':''}</div>
+          <div class="font-mono" style="font-size:1.1rem;color:var(--cyan);">${tempVal}°C</div>
+        </div>
+        <div class="glass" style="padding:12px;border-radius:10px;${isLive?'border-color:rgba(245,166,35,0.2);':''}">
+          <div style="font-size:9px;color:rgba(245,166,35,0.5);margin-bottom:4px;font-family:'Space Mono',monospace;">CO₂ ${isLive?'💨':''}</div>
+          <div class="font-mono" style="font-size:1.1rem;color:var(--amber);">${co2Val} ppm</div>
+        </div>
+        <div class="glass" style="padding:12px;border-radius:10px;${isLive?'border-color:rgba(0,229,160,0.2);':''}">
+          <div style="font-size:9px;color:rgba(0,229,160,0.5);margin-bottom:4px;font-family:'Space Mono',monospace;">KELEMBAPAN ${isLive?'💧':''}</div>
+          <div class="font-mono" style="font-size:1.1rem;color:var(--emerald);">${humVal}%</div>
+        </div>
+        <div class="glass" style="padding:12px;border-radius:10px;${isLive?'border-color:rgba(253,224,71,0.2);':''}">
+          <div style="font-size:9px;color:rgba(253,224,71,0.5);margin-bottom:4px;font-family:'Space Mono',monospace;">CAHAYA ${isLive?'☀️':''}</div>
+          <div class="font-mono" style="font-size:1.1rem;color:#fde047;">${luxVal} lx</div>
+        </div>
+        ${radarInfo}
+      </div>
+    </div>`;
+
+  // Isi radar detail jika live
+  if (isLive) {
+    const rd = document.getElementById('roomDetailRadar');
+    if (rd) {
+      const ps = state.occupied;
+      rd.innerHTML = ps
+        ? `<span style="color:var(--emerald);">● Ada kehadiran terdeteksi</span><br>
+           ${state._radarStationary ? `Diam: <strong style="color:var(--cyan);">${state._stDist} cm</strong> (energi ${state._stEnergy})<br>` : ''}
+           ${state._radarMoving ? `Bergerak: <strong style="color:var(--amber);">${state._mvDist} cm</strong> (energi ${state._mvEnergy})` : ''}`
+        : `<span style="color:rgba(180,210,245,0.35);">○ Tidak ada target terdeteksi</span>`;
+    }
+  }
+}
+
+function renderRoomEnergy() {
+  const tbody = document.getElementById('roomEnergyBody');
+  if(!tbody) return;
+  tbody.innerHTML = state.rooms.slice(0,8).map(r => {
+    const kwh = (r.power * 10 / 1000).toFixed(2);
+    const cost = Math.round(+kwh * 1500);
+    const eff = r.power < 250 ? 'Efisien' : r.power < 350 ? 'Normal' : 'Boros';
+    const effColor = r.power < 250 ? 'var(--emerald)' : r.power < 350 ? 'var(--amber)' : 'var(--rose)';
+    const liveIcon = (r.liveData && esp32Live) ? '<span style="color:var(--emerald);font-size:9px;margin-left:4px;">⬤ LIVE</span>' : '';
+    return `<tr>
+      <td style="font-weight:600;color:#e2f0ff;">${r.id}${liveIcon}</td>
+      <td class="font-mono" style="color:var(--amber);">${Math.round(r.power)}W</td>
+      <td class="font-mono">${kwh}</td>
+      <td class="font-mono">Rp ${cost.toLocaleString()}</td>
+      <td><span class="badge ${r.occupied?'badge-ok':'badge-info'}">${r.occupied?'MENYALA':'MATI'}</span></td>
+      <td style="color:${effColor};font-weight:600;font-size:12px;">${eff}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  ALERTS
+// ═══════════════════════════════════════════════════
+const alertTemplates = [
+  {type:'warn', icon:'fa-triangle-exclamation', text:'AC Unit Lt.3B — arus naik 22% dari baseline. Rekomendasi: periksa filter kompresor.'},
+  {type:'crit', icon:'fa-circle-xmark', text:'AC Unit Lt.3C — konsumsi daya 2.1× normal. Kemungkinan kompresor degradasi. Segera service!'},
+  {type:'ok', icon:'fa-circle-check', text:'Sistem IoT Lt.3A — semua sensor berfungsi normal. Data dikirim ke server kampus.'},
+  {type:'ok', icon:'fa-leaf', text:'DCV aktif di 8 ruangan — katup damper tertutup karena CO₂ < 600ppm. Hemat ±18% energi AC.'},
+];
+
+function renderAlerts() {
+  const c = document.getElementById('alertsContainer');
+  if(!c) return;
+  c.innerHTML = alertTemplates.map(a => {
+    const col = a.type==='crit'?'var(--rose)':a.type==='warn'?'var(--amber)':'var(--emerald)';
+    const cls = `alert-${a.type==='ok'?'ok':a.type}`;
+    return `<div class="alert-item ${cls}" style="border-color:${col}40;">
+      <i class="fa-solid ${a.icon}" style="color:${col};margin-top:1px;flex-shrink:0;"></i>
+      <span style="font-size:12px;color:rgba(200,225,245,0.75);line-height:1.5;">${a.text}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  ANOMALY HISTORY DATA
+// ═══════════════════════════════════════════════════
+const anomalyHistory = { labels:[], actual:[], baseline:[], spikes:[] };
+function updateAnomalyChart() {
+  const now = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const base = 6.5;
+  const mult = state.tick % 30 < 5 ? 1.4 + Math.random()*0.3 : 0.95 + Math.random()*0.1;
+  const actual = +(base * mult).toFixed(2);
+  const isSpike = actual > base * 1.25;
+
+  if(anomalyHistory.labels.length > 25) {
+    ['labels','actual','baseline','spikes'].forEach(k => anomalyHistory[k].shift());
+  }
+  anomalyHistory.labels.push(now);
+  anomalyHistory.actual.push(actual);
+  anomalyHistory.baseline.push(base);
+  anomalyHistory.spikes.push(isSpike ? actual : null);
+
+  anomalyChart.data.labels = anomalyHistory.labels;
+  anomalyChart.data.datasets[0].data = anomalyHistory.actual;
+  anomalyChart.data.datasets[1].data = anomalyHistory.baseline;
+  anomalyChart.data.datasets[2].data = anomalyHistory.spikes;
+  anomalyChart.update('none');
+}
+
+// ═══════════════════════════════════════════════════
+//  SCHEDULE GRID
+// ═══════════════════════════════════════════════════
+function renderSchedule() {
+  const grid = document.getElementById('scheduleGrid');
+  if(!grid) return;
+  const slots = ['06:00–08:00','08:00–10:00','10:00–12:00','12:00–14:00','14:00–16:00','16:00–18:00','18:00–20:00','20:00+'];
+  const statuses = ['Kosong','Aktif','Aktif','Istirahat','Aktif','Aktif','Standby','Hemat'];
+  const colors = ['rgba(100,150,200,0.3)','var(--emerald)','var(--emerald)','var(--amber)','var(--emerald)','var(--emerald)','rgba(168,85,247,0.7)','rgba(0,212,232,0.5)'];
+  grid.innerHTML = slots.map((s,i)=>`
+    <div class="glass" style="padding:12px;border-radius:10px;text-align:center;border-color:${colors[i]}30;">
+      <div class="font-mono" style="font-size:10px;color:${colors[i]};margin-bottom:4px;">${s}</div>
+      <div style="font-size:12px;font-weight:600;color:rgba(200,225,245,0.7);">${statuses[i]}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  MAIN UPDATE LOOP
+// ═══════════════════════════════════════════════════
+function update() {
+  state.tick++;
+
+  // ── Hanya simulasikan nilai sensor jika ESP32 tidak live ──
+  if (!esp32Live) {
+    state.temp     = Math.max(22, Math.min(32, state.temp + (Math.random()*1.2-0.6)));
+    state.co2      = Math.max(400, Math.min(1300, state.co2 + (Math.random()*50-25)));
+    state.humidity = Math.round(Math.max(40, Math.min(80, state.humidity + (Math.random()*3-1.5))));
+    state.lux      = Math.round(Math.max(30, Math.min(600, state.lux + (Math.random()*40-20))));
+    state.occupied = Math.random() > 0.15;
+  }
+
+  // Simulasi PZEM hanya jika sensor tidak terhubung
+  if (!state.pzemOk) {
+    state.voltage = +(220 + (Math.random()*6-3)).toFixed(1);
+    state.current = +(1.2 + Math.random()*0.35).toFixed(2);
+    state.power   = Math.round(260 + Math.random()*100);
+    state.energy  = +(state.energy + 0.001).toFixed(3);
+    state.frequency = 50.0;
+    state.pf        = +(0.85 + Math.random()*0.1).toFixed(2);
+  }
+
+  const r0 = state.rooms[0];
+  if (esp32Live) {
+    r0.temp     = state.temp;
+    r0.co2      = state.co2;
+    r0.humidity = state.humidity;
+    r0.lux      = state.lux;
+    r0.occupied = state.occupied;
+    r0.lamp     = state.lux < 200;
+    r0.status   = state.co2 > 1000 ? 'critical' : state.co2 > 700 ? 'warn' : 'normal';
+  }
+
+  // Lamp brightness (daylight harvesting)
+  state.lampBrightness = state.lux >= 300 ? 0 : state.lux >= 200 ? 25 : state.lux >= 100 ? 60 : 100;
+
+  // Update DOM
+  document.getElementById('tempValue').textContent = state.temp.toFixed(1) + '°C';
+  document.getElementById('humidityValue').textContent = state.humidity + '%';
+  document.getElementById('co2Value').textContent = Math.round(state.co2) + ' ppm';
+  document.getElementById('luxValue').textContent = state.lux + ' Lx';
+  document.getElementById('lampBrightness').textContent = 'LAMPU ' + state.lampBrightness + '%';
+  document.getElementById('voltageValue').textContent = state.voltage + 'V';
+  document.getElementById('currentValue').textContent = state.current + 'A';
+  document.getElementById('powerValue').textContent = state.power + 'W';
+  document.getElementById('energyValue').textContent = state.energy.toFixed(2) + ' kWh';
+
+  const freqEl = document.getElementById('frequencyValue');
+  const pfEl   = document.getElementById('pfValue');
+  if (freqEl) freqEl.textContent = state.frequency.toFixed(1) + ' Hz';
+  if (pfEl)   pfEl.textContent   = state.pf.toFixed(2);
+
+  document.getElementById('costValue').textContent = 'Rp ' + Math.round(state.energy * 1500).toLocaleString('id-ID');
+  document.getElementById('presenceValue').textContent = state.occupied ? 'Ada Orang' : 'Kosong';
+
+  // Health score
+  const critCount = state.components.filter(c=>c.status==='critical').length;
+  const warnCount = state.components.filter(c=>c.status==='warn').length;
+  const hs = Math.max(40, 100 - critCount*25 - warnCount*8);
+  document.getElementById('healthScore').textContent = hs + '%';
+
+  // Badges
+  const co2Badge = document.getElementById('co2Badge');
+  if(co2Badge) {
+    if(state.co2 < 600) { co2Badge.textContent='BAIK'; co2Badge.className='badge badge-ok'; }
+    else if(state.co2 < 1000) { co2Badge.textContent='MODERAT'; co2Badge.className='badge badge-warn'; }
+    else { co2Badge.textContent='BURUK'; co2Badge.className='badge badge-crit'; }
+  }
+
+  // Sensor chart
+  const now = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if(sensorChart.data.labels.length > 25) {
+    sensorChart.data.labels.shift();
+    sensorChart.data.datasets.forEach(d=>d.data.shift());
+  }
+  sensorChart.data.labels.push(now);
+  sensorChart.data.datasets[0].data.push(state.temp.toFixed(1));
+  sensorChart.data.datasets[1].data.push((state.co2/10).toFixed(1));
+  sensorChart.data.datasets[2].data.push((state.power/10).toFixed(1));
+  sensorChart.update('none');
+
+  // Power chart
+  powerChart.data.datasets[0].data = [state.voltage, state.current*150, state.power*0.75, state.energy*20];
+  powerChart.update('none');
+
+  // Anomaly chart
+  updateAnomalyChart();
+
+  // Render components (every 5 ticks)
+  if(state.tick % 5 === 0) {
+    renderComponentCards();
+    renderRiskMeter();
+    renderFaultTable();
+  }
+
+  // Update rooms
+  state.rooms.forEach(r => {
+    r.temp = Math.max(22,Math.min(32,r.temp+(Math.random()*0.5-0.25)));
+    r.co2 = Math.max(400,Math.min(1300,r.co2+(Math.random()*30-15)));
+    r.power = Math.max(50,Math.min(500,r.power+(Math.random()*20-10)));
+  });
+
+  // Hero counters
+  const activeRooms = state.rooms.filter(r=>r.occupied).length;
+  document.getElementById('heroActiveRooms').textContent = activeRooms;
+  document.getElementById('heroFaultCount').textContent = state.components.filter(c=>c.status!=='normal').length;
+  const arc = document.getElementById('activeRoomCount');
+  if(arc) arc.textContent = activeRooms;
+}
+
+//  SLIDERS
+function setupSliders() {
+  const luxS = document.getElementById('luxSlider');
+  const tempS = document.getElementById('tempSlider');
+  const co2S = document.getElementById('co2Slider');
+  const toS = document.getElementById('timeoutSlider');
+  if(luxS) luxS.addEventListener('input',e=>{ document.getElementById('luxThreshold').textContent=e.target.value+' Lx'; });
+  if(tempS) tempS.addEventListener('input',e=>{ document.getElementById('tempThreshold').textContent=e.target.value+'°C'; });
+  if(co2S) co2S.addEventListener('input',e=>{ document.getElementById('co2Threshold').textContent=e.target.value+' ppm'; });
+  if(toS) toS.addEventListener('input',e=>{ document.getElementById('timeoutThreshold').textContent=e.target.value+' mnt'; });
+}
+
+//  DEVICE TOGGLE
+function toggleDevice(btn, device) {
+  const isAuto = btn.textContent.trim() === 'AUTO';
+  btn.textContent = isAuto ? 'MANUAL' : 'AUTO';
+  btn.style.background = isAuto ? 'rgba(245,166,35,0.12)' : 'rgba(0,229,160,0.1)';
+  btn.style.color = isAuto ? 'var(--amber)' : 'var(--emerald)';
+  btn.style.borderColor = isAuto ? 'rgba(245,166,35,0.35)' : 'rgba(0,229,160,0.3)';
+}
+
+//  ESP32 REAL-DATA FETCH ENGINE
+let ESP32_IP   = localStorage.getItem('shakespeare_esp32_ip') || '192.168.1.100';
+let esp32Live  = false;   // true saat berhasil fetch data
+let lastFetchOk = 0;
+
+// Set IP dari input panel
+function setESP32IP() {
+  const val = document.getElementById('esp32IpInput').value.trim();
+  if (val) {
+    ESP32_IP = val;
+    localStorage.setItem('shakespeare_esp32_ip', ESP32_IP);
+    document.getElementById('connStatusBox').textContent = `Menghubungkan ke ${ESP32_IP}...`;
+    fetchESP32(); // langsung coba
+  }
+}
+
+// Update indikator koneksi di nav
+function setConnUI(connected, ip) {
+  const dot   = document.getElementById('connDot');
+  const label = document.getElementById('connLabel');
+  const box   = document.getElementById('connStatusBox');
+  if (connected) {
+    dot.style.background    = 'var(--emerald)';
+    dot.style.boxShadow     = '0 0 10px rgba(0,229,160,0.6)';
+    label.style.color       = 'rgba(0,229,160,0.8)';
+    label.textContent       = 'LIVE · ' + ip;
+    if (box) box.textContent = `✓ Terhubung ke ESP32 (${ip}) — data refresh setiap 2 detik`;
+  } else {
+    dot.style.background    = 'rgba(255,100,100,0.5)';
+    dot.style.boxShadow     = '0 0 8px rgba(255,100,100,0.3)';
+    label.style.color       = 'rgba(255,100,100,0.6)';
+    label.textContent       = 'OFFLINE';
+    if (box) box.textContent = `✗ Tidak dapat menjangkau ${ip} — menampilkan data simulasi`;
+  }
+}
+
+// Update panel radar LD2410
+function updateRadarPanel(d) {
+  const presEl   = document.getElementById('radarPresence');
+  const statEl   = document.getElementById('radarStatus');
+  const sdEl     = document.getElementById('radarStationaryDist');
+  const seEl     = document.getElementById('radarStationaryEnergy');
+  const mdEl     = document.getElementById('radarMovingDist');
+  const meEl     = document.getElementById('radarMovingEnergy');
+  const connEl   = document.getElementById('radarConnOk');
+  if (!presEl) return;
+
+  connEl.textContent = d.radarOk ? 'ONLINE' : 'OFFLINE';
+  connEl.style.color = d.radarOk ? 'var(--emerald)' : 'var(--rose)';
+
+  if (!d.presence) {
+    presEl.textContent = 'Kosong';
+    presEl.style.color = 'rgba(180,210,245,0.35)';
+    statEl.textContent = 'TIDAK ADA TARGET';
+    statEl.className   = 'badge badge-info';
+    sdEl.textContent   = '— cm'; seEl.textContent = 'Energi: —';
+    mdEl.textContent   = '— cm'; meEl.textContent = 'Energi: —';
+  } else {
+    const parts = [];
+    if (d.stationary) parts.push('Diam');
+    if (d.moving)     parts.push('Bergerak');
+    presEl.textContent = parts.join(' & ') || 'Terdeteksi';
+    presEl.style.color = 'var(--emerald)';
+    statEl.textContent = 'ADA ORANG';
+    statEl.className   = 'badge badge-ok';
+
+    sdEl.textContent = d.stationary ? d.stationaryDist + ' cm' : '— cm';
+    seEl.textContent = d.stationary ? 'Energi: ' + d.stationaryEnergy : 'Energi: —';
+    mdEl.textContent = d.moving ? d.movingDist + ' cm' : '— cm';
+    meEl.textContent = d.moving ? 'Energi: ' + d.movingEnergy : 'Energi: —';
+  }
+}
+
+// Fetch utama dari ESP32
+async function fetchESP32() {
+  try {
+    //const url = `http://10.74.144.15/data`;
+    const url = `http://192.168.1.2/data`;
+    const ctl = new AbortController();
+    const tid = setTimeout(() => ctl.abort(), 3000);
+    const res = await fetch(url, { signal: ctl.signal });
+    clearTimeout(tid);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const d = await res.json();
+    esp32Live   = true;
+    lastFetchOk = Date.now();
+
+    // ── Override state dengan data sensor nyata ──
+    if (d.scd4xOk) {
+      state.temp     = +d.temperature;
+      state.co2      = +d.co2;
+      state.humidity = +d.humidity;
+    }
+    if (d.bh1750Ok) {
+      state.lux = +d.lux;
+    }
+    if (d.pzemOk && d.voltage !== null) {
+      state.voltage   = +d.voltage;
+      state.current   = +d.current;
+      state.power     = +d.power;
+      state.energy    = +d.energy;
+      state.frequency = +d.frequency;
+      state.pf        = +d.pf;
+      state.pzemOk    = true;
+
+      // Update badge Power Quality Monitor → LIVE
+      const pzemBadge = document.getElementById('pzemBadge');
+      if (pzemBadge) {
+        pzemBadge.textContent = '⬤ PZEM LIVE';
+        pzemBadge.className   = 'badge badge-ok';
+      }
+    } else {
+        state.pzemOk = false;
+        const pzemBadge = document.getElementById('pzemBadge');
+      if (pzemBadge) {
+        pzemBadge.textContent = 'PZEM OFFLINE';
+        pzemBadge.className   = 'badge badge-warn';
+      }
+    }
+
+    // ── Simpan data radar ke state untuk showRoomDetail F3.1 ──
+    state._radarStationary = d.stationary;
+    state._radarMoving     = d.moving;
+    state._stDist          = d.stationaryDist;
+    state._stEnergy        = d.stationaryEnergy;
+    state._mvDist          = d.movingDist;
+    state._mvEnergy        = d.movingEnergy;
+
+    // ── Update radar panel ──
+    updateRadarPanel(d);
+
+    // ── Update koneksi UI ──
+    setConnUI(true, ESP32_IP);
+
+    // ── Health score berdasarkan sensor online ──
+    const sensorOk = [d.bh1750Ok, d.scd4xOk, d.radarOk].filter(Boolean).length;
+    const hsEl = document.getElementById('healthScore');
+    if (hsEl) {
+      const hs = Math.round(70 + sensorOk * 10);
+      hsEl.textContent = hs + '%';
+    }
+
+  } catch (err) {
+    esp32Live = false;
+    setConnUI(false, ESP32_IP);
+    const connEl = document.getElementById('radarConnOk');
+    if (connEl) {
+      connEl.textContent = 'SIMULASI';
+      connEl.style.color = '#a855f7';
+    }
+  }
+}
+
+// Isi input dari localStorage
+document.getElementById('esp32IpInput').value = ESP32_IP;
+
+renderAlerts();
+renderComponentCards();
+renderRiskMeter();
+renderFaultTable();
+renderRoomGrid();
+renderRoomEnergy();
+renderSchedule();
+setupSliders();
+update();
+setInterval(update, 2500);
+setInterval(() => { renderRoomGrid(); renderRoomEnergy(); }, 5000);
+
+setTimeout(fetchESP32, 500);
+setInterval(fetchESP32, 2000);
+
+</script>
+</body>
+</html>
