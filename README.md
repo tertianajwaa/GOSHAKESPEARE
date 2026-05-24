@@ -1,7 +1,7 @@
 # SHAKESPEARE
 Proyek SHAKESPEARE ini merupakan sistem manajemen energi ruang kelas berbasis IoT yang dikembangkan sebagai bagian dari inisiatif green campus. Sistem ini dirancang untuk mengurangi pemborosan energi listrik yang selama ini terjadi akibat peralatan seperti AC dan lampu yang dibiarkan menyala meski ruangan sudah kosong. Perangkat keras utama yang digunakan adalah mikrokontroler ESP32 yang terhubung ke lima sensor berbeda secara bersamaan. Seluruh data dari sensor dikirim melalui jaringan WiFi ke server kampus dan dapat diakses lewat endpoint HTTP dalam format JSON.
 
-Sensor dan Fungsinya
+# Sensor dan Fungsinya
 1. BH1750 Sensor Intensitas Cahaya
 Sensor ini membaca tingkat kecerahan ruangan dalam satuan lux. Nilainya digunakan untuk mengatur duty cycle lampu secara otomatis melalui sinyal PWM. Jika cahaya alami dari luar sudah cukup terang (di atas 150 lux), sistem tidak akan menyalakan lampu. Sebaliknya, jika ruangan gelap atau mendung, lampu dinyalakan secara proporsional. Proses transisi lampu dilakukan secara halus menggunakan teknik fading agar tidak terjadi kedipan mendadak.
 2. SCD41 Sensor CO2, Suhu, dan Kelembapan
@@ -11,28 +11,26 @@ Sensor radar ini mendeteksi kehadiran manusia di dalam ruangan, baik yang sedang
 4. PZEM-004T Sensor Energi Listrik
 Sensor ini membaca tegangan, arus, daya, frekuensi, power factor, dan akumulasi energi dalam kWh secara real-time. Data kWh harian juga digunakan untuk keperluan pelaporan jejak karbon dan audit efisiensi energi antar ruangan.
 
-Alur Kerja Sistem
-Sebagai gambaran singkat, berikut skenario kerja harian sistem ini dari pagi hingga sore.
-Pada pukul 07.00 ketika mahasiswa mulai masuk, sensor radar mendeteksi kehadiran dan mempersiapkan AC untuk menyala. Sensor cahaya kemudian mengecek kondisi ruangan, jika pagi itu cerah dan sinar matahari sudah cukup, lampu tidak dinyalakan. Jika kondisi intensitas cahaya ruangan sedikit gelap maka intensitas lampu akan menyesuaikan. Memasuki siang hari saat kelas penuh, sensor CO2 mendeteksi udara mulai pengap dan sistem membuka katup ventilasi secara otomatis. Pada pukul 15.00 setelah jadwal kuliah selesai, sensor radar tidak lagi mendeteksi kehadiran. Setelah 20 menit, seluruh perangkat dimatikan secara otomatis. Sepanjang hari, sensor energi mencatat seluruh konsumsi listrik dan mengirimkan datanya ke server kampus.
-
-Mengapa Sensor-Sensor Ini
-SCD41 bukan Sekadar Sensor CO2 Biasa
+# Mengapa Sensor-Sensor Ini
+# SCD41 bukan Sekadar Sensor CO2 Biasa
 Sebagian besar sensor CO2 murah yang beredar di pasaran bekerja dengan prinsip MOS (Metal Oxide Semiconductor), yang sebenarnya tidak mengukur CO2 secara langsung. Sensor jenis itu mengukur perubahan resistansi bahan kimia saat terpapar gas campuran, lalu mengestimasi kadar CO2 dari sana. Hasilnya tidak stabil, mudah drift, dan sangat terpengaruh oleh suhu serta kelembapan ruangan.
 SCD41 menggunakan prinsip yang berbeda, yaitu NDIR atau Non-Dispersive Infrared. Cara kerjanya: sumber cahaya inframerah dipancarkan melalui tabung berisi sampel udara, lalu detektor di ujung lain mengukur seberapa banyak cahaya yang diserap. CO2 menyerap panjang gelombang inframerah tertentu secara konsisten, sehingga kadarnya bisa dihitung secara langsung dan akurat tanpa bergantung pada reaksi kimia yang bisa berubah seiring waktu.
 Implikasinya untuk proyek ini cukup besar. Karena SCD41 mengukur CO2 secara aktual, sistem bisa mempercayai angkanya untuk membuat keputusan: kapan harus membuka katup udara luar pada AC central, kapan udara di dalam ruangan masih layak untuk disirkulasikan ulang, dan kapan kualitas udara sudah mulai menurun meski kelas baru terisi setengah jam. Selain CO2, sensor yang sama juga memberikan data suhu dan kelembapan dalam satu paket, yang digunakan sebagai masukan untuk mengatur level pendinginan AC.
-HLK-LD2410 mendeteksi Manusia yang Diam Pun
+# HLK-LD2410 mendeteksi Manusia yang Diam Pun
 Sensor gerak konvensional berbasis PIR (Passive Infrared) hanya bisa mendeteksi perubahan panas yang bergerak. Artinya, jika ada seorang mahasiswa yang duduk diam membaca atau mengerjakan tugas, sensor PIR tidak akan mendeteksinya dan akan menganggap ruangan kosong. Dalam beberapa menit, sistem akan mematikan AC dan lampu atas orang yang masih berada di sana.
 LD2410 bekerja dengan teknologi yang sama sekali berbeda, yaitu radar gelombang mikro pada frekuensi 24 GHz. Sensor ini memancarkan sinyal radio dan menganalisis pantulannya menggunakan prinsip Doppler. Yang membedakannya dari radar biasa adalah kemampuannya mendeteksi micro-motion, yaitu gerakan sangat kecil seperti naik turunnya dada saat bernapas. Seseorang yang duduk benar-benar diam pun masih menghasilkan micro-motion yang cukup untuk terdeteksi oleh sensor ini.
 Hasilnya adalah sistem yang tidak salah menganggap ruangan kosong hanya karena tidak ada yang berjalan. Sensor ini juga membedakan antara target diam dan target bergerak secara bersamaan, serta memberikan informasi jarak dan tingkat energi pantulan untuk setiap kategori. Ini jauh lebih kaya informasi dibandingkan PIR yang hanya menghasilkan sinyal ada atau tidak ada.
-BH1750 mengukur Cahaya dalam Satuan yang Bermakna
+# BH1750 mengukur Cahaya dalam Satuan yang Bermakna
 Alasan menggunakan BH1750 bukan sekadar kemudahan koneksi I2C-nya. Sensor ini mengukur intensitas cahaya dalam satuan lux, yang merupakan satuan baku untuk mendeskripsikan pencahayaan ruangan sesuai standar bangunan. Sensor cahaya berbasis LDR atau fotodioda sederhana hanya menghasilkan nilai tegangan analog yang tidak punya makna langsung — perlu kalibrasi ulang setiap kali kondisi berubah.
 Dengan BH1750, nilai yang dibaca sudah dalam lux dan bisa langsung dibandingkan dengan standar pencahayaan ruang kelas yang umumnya direkomendasikan antara 300 hingga 500 lux. Sistem menggunakan nilai ini untuk menentukan duty cycle lampu secara proporsional melalui sinyal PWM. Ketika cahaya matahari sudah melampaui ambang tertentu, lampu dimatikan sepenuhnya. Ketika cahaya mulai redup, lampu dinyalakan secara bertahap dengan transisi yang halus agar tidak terjadi kedipan mendadak.
-PZEM-004T untuk Membuktikan, Bukan Hanya Mengontrol
+# PZEM-004T untuk Membuktikan, Bukan Hanya Mengontrol
 Hampir semua sensor di sistem ini bertugas mengontrol sesuatu: sensor CO2 mengatur ventilasi, sensor radar mengatur kapan AC mati, sensor cahaya mengatur lampu. PZEM-004T punya peran yang berbeda. Sensor ini bertugas membuktikan bahwa kontrol yang dilakukan benar-benar bekerja.
 PZEM-004T mengukur tegangan, arus, daya aktif, frekuensi jaringan, power factor, dan akumulasi energi dalam kWh secara real-time melalui koneksi langsung ke jalur listrik AC. Ketika sistem memerintahkan relay untuk mematikan AC, data arus dari PZEM bisa memverifikasi apakah perintah itu benar-benar dieksekusi. Jika relay sudah aktif tapi arus masih terdeteksi tinggi, itu indikasi ada masalah pada kontaktor atau relay yang perlu ditangani teknisi.
 Di luar fungsi validasi, data kWh kumulatif yang dikumpulkan sensor ini adalah satu-satunya cara untuk mengkuantifikasi efisiensi sistem secara nyata. Klaim penghematan energi tanpa data pengukuran hanyalah asumsi. Dengan PZEM, angka penghematan bisa dihitung, dibandingkan antar ruangan, dan dilaporkan sebagai bukti konkret untuk keperluan audit energi atau laporan green campus.
-
-Arsitektur Perangkat Keras
+# Kombinasi Sensor dan Keputusan Sistem
+Keempat sensor ini tidak bekerja sendiri-sendiri. Sistem mengambil keputusan berdasarkan kombinasi data dari semuanya secara bersamaan. Radar menentukan apakah ruangan terisi. Jika ya, CO2 menentukan apakah udara perlu diperbarui. Cahaya menentukan apakah lampu perlu dinyalakan. Dan PZEM memverifikasi bahwa semua yang diperintahkan benar-benar terjadi di level hardware.
+Tanpa sensor radar yang bisa mendeteksi orang diam, sistem akan terlalu agresif mematikan perangkat. Tanpa sensor CO2 berbasis NDIR yang akurat, keputusan ventilasi tidak bisa diandalkan. Tanpa pengukuran cahaya dalam lux, kontrol lampu hanya akan bersifat tebakan. Dan tanpa PZEM, tidak ada cara untuk tahu apakah sistem bekerja dengan benar atau tidak.
+# Arsitektur Perangkat Keras
 ESP32 berkomunikasi dengan BH1750 dan SCD41 melalui protokol I2C pada pin SDA (GPIO 21) dan SCL (GPIO 22). Sensor radar LD2410 terhubung via UART melalui Serial2 pada pin RX (GPIO 32) dan TX (GPIO 33). Sensor energi PZEM-004T terhubung via UART melalui Serial1 pada pin RX (GPIO 26) dan TX (GPIO 27). Output PWM untuk kontrol lampu menggunakan GPIO 18 dengan frekuensi 5000 Hz dan resolusi 8-bit.
 
 Endpoint API
